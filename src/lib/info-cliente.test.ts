@@ -30,6 +30,7 @@ describe('info del cliente', () => {
     const map = Object.fromEntries(r.map((c) => [c.etiqueta, c.columna]))
     expect(map).toEqual({
       'Saldo aprox. en puntos': 'Saldo_aprox_en_Puntos',
+      'Día de entrega': null,
       'Status autogestión': 'status_autogestion',
       'Inscrito en Premia': 'inscrito_premia',
       Cuponera: 'cuponera',
@@ -57,7 +58,7 @@ describe('info del cliente', () => {
 
 describe('columnas de la tabla clientes real', () => {
   it('encuentra cada dato aunque los nombres no sean los de FlutterFlow', () => {
-    const columnas = ['id', 'id_cliente', 'nombre_cliente', 'calle', 'latitud', 'longitud', 'gec', 'rm1', 'autogestion', 'competitividad', 'saldo_premia', 'promos_ultimos_3_meses', 'inscrito_loyalty', 'canjes_ultimos_3_meses', 'retos_ultimos_3_meses', 'loteria_ultimos_3_meses', 'cuponera_estado', 'cuponera_segmento']
+    const columnas = ['id', 'id_cliente', 'nombre_cliente', 'calle', 'latitud', 'longitud', 'gec', 'rm1', 'autogestion', 'competitividad', 'saldo_premia', 'promos_ultimos_3_meses', 'inscrito_loyalty', 'canjes_ultimos_3_meses', 'retos_ultimos_3_meses', 'loteria_ultimos_3_meses', 'cuponera_estado', 'cuponera_segmento', 'dia_visita', 'dia_entrega']
     const r = Object.fromEntries(resolverInfoCliente(columnas, ['id', 'id_cliente', 'nombre_cliente', 'calle', 'latitud', 'longitud']).map((c) => [c.etiqueta, c.columna]))
     expect(r['Saldo aprox. en puntos']).toBe('saldo_premia')
     expect(r['Status autogestión']).toBe('autogestion')
@@ -65,6 +66,7 @@ describe('columnas de la tabla clientes real', () => {
     expect(r['Cuponera']).toBe('cuponera_segmento')
     expect(r['Status cuponera']).toBe('cuponera_estado')
     expect(r['Canal']).toBe('rm1')
+    expect(r['Día de entrega']).toBe('dia_entrega')
     expect(r['Canjes']).toBe('canjes_ultimos_3_meses')
     expect(r['Promos']).toBe('promos_ultimos_3_meses')
     expect(r['Lotería']).toBe('loteria_ultimos_3_meses')

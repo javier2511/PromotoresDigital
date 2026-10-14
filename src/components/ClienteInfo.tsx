@@ -2,6 +2,7 @@ import { Coins } from 'lucide-react'
 import { useMemo } from 'react'
 import { TITULO_METRICAS } from '../config/schema'
 import type { Cliente } from '../data/clientes'
+import { DIAS, diaHoy, diasDe } from '../lib/dias'
 import { columnasInternas, resolverInfoCliente, type CampoEncontrado } from '../lib/info-cliente'
 import type { SchemaContext } from '../lib/schema-resolver'
 import { formatValue } from '../lib/text'
@@ -10,6 +11,14 @@ import { Card, SectionTitle } from './ui/Card'
 interface Dato {
   etiqueta: string
   valor: string
+}
+
+/** "lunesjueves" → "Lunes, Jueves (hoy)"; si no se reconocen días, el texto tal cual. */
+function formatoDias(valor: unknown): string {
+  const dias = diasDe(valor)
+  if (dias.length === 0) return formatValue(valor)
+  const texto = dias.map((d) => DIAS[d - 1].largo).join(', ')
+  return dias.includes(diaHoy()) ? `${texto} (hoy)` : texto
 }
 
 export function useInfoCliente(cliente: Cliente | undefined, ctx: SchemaContext | undefined): CampoEncontrado[] {
@@ -27,7 +36,8 @@ export function ClienteInfo({ cliente, ctx }: { cliente: Cliente; ctx: SchemaCon
     const out: Record<'destacado' | 'metrica' | 'dato', Dato[]> = { destacado: [], metrica: [], dato: [] }
     for (const campo of campos) {
       if (!campo.columna) continue
-      out[campo.tipo].push({ etiqueta: campo.etiqueta, valor: formatValue(cliente.raw[campo.columna]) })
+      const crudo = cliente.raw[campo.columna]
+      out[campo.tipo].push({ etiqueta: campo.etiqueta, valor: campo.formato === 'dias' ? formatoDias(crudo) : formatValue(crudo) })
     }
     return out
   }, [campos, cliente])

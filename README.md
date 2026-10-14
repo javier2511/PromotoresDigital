@@ -171,6 +171,10 @@ jornadas de todos con su duración.
 
 ### Información del cliente (ficha)
 
+**Día de entrega:** ejecuta `supabase/07_dia_entrega.sql` para agregar la columna `dia_entrega` a clientes y
+llénala tú (Table Editor, CSV o `update`). Aparece en la ficha como "Día de entrega"; si escribes días
+("Jueves", "Lunes, Jueves", "lunesjueves") se muestran con su nombre completo y "(hoy)" cuando toca ese día.
+
 La ficha muestra solo los datos de la lista `INFO_CLIENTE` en `src/config/schema.ts`, en ese orden: el saldo
 de puntos destacado, los indicadores de los últimos 3 meses en mosaicos y el resto como filas. La app busca la
 columna de cada dato por su nombre sin importar mayúsculas, acentos ni guiones bajos (por ejemplo

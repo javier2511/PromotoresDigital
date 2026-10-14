@@ -483,16 +483,25 @@ export const RESPUESTAS_EN_VISITA: RespuestaEnVisita[] = [
  *  - `palabras`: si no hay nombre exacto, una columna cuyo nombre contenga TODAS las palabras de algún grupo.
  * En ambos casos no importan mayúsculas, acentos, espacios ni guiones bajos ("Status_cuponera" = "status cuponera").
  * `tipo`: 'destacado' (número grande), 'metrica' (mosaico de "últimos 3 meses") o 'dato' (fila).
+ * `formato`: 'dias' muestra días escritos de cualquier forma ("lunesjueves", "Mar") como "Lunes, Jueves".
  */
 export interface CampoInfoCliente {
   etiqueta: string
   tipo: 'destacado' | 'metrica' | 'dato'
   columnas?: string[]
   palabras?: string[][]
+  formato?: 'dias'
 }
 
 export const INFO_CLIENTE: CampoInfoCliente[] = [
   { etiqueta: 'Saldo aprox. en puntos', tipo: 'destacado', palabras: [['saldo']] },
+  {
+    etiqueta: 'Día de entrega',
+    tipo: 'dato',
+    columnas: ['dia_entrega', 'dia_de_entrega', 'dias_entrega', 'dias_de_entrega'],
+    palabras: [['entrega']],
+    formato: 'dias',
+  },
   { etiqueta: 'Status autogestión', tipo: 'dato', palabras: [['autogestion']] },
   { etiqueta: 'Inscrito en Premia', tipo: 'dato', palabras: [['inscrito'], ['premia'], ['loyalty']] },
   { etiqueta: 'Cuponera', tipo: 'dato', columnas: ['cuponera'], palabras: [['cuponera', 'segmento'], ['cuponera']] },
