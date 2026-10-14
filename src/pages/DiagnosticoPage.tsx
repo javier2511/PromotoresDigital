@@ -1,0 +1,244 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { CircleAlert, CircleCheck, ClipboardCopy, RotateCw, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { ErrorState } from '../components/ErrorState'
+import { TopBar } from '../components/PageHeader'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { cn } from '../components/ui/cn'
+import { Skeleton } from '../components/ui/Skeleton'
+import { schema, type Schema } from '../config/schema'
+import { queryKeys, useClientes, useFormulario, useSchema } from '../data/hooks'
+import { clearSchemaCache, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
+import { useUser } from '../providers/AuthProvider'
+
+const TITULOS: Record<keyof Schema, string> = {
+  clientes: 'Clientes',
+  preguntas: 'Preguntas',
+  reglas: 'Reglas de preguntas',
+  visitas: 'Visitas',
+  respuestas: 'Respuestas',
+  resultados: 'Resultados',
+  perfiles: 'Usuarios (opcional)',
+}
+
+const CAMPOS: Record<string, string> = {
+  id: 'Id',
+  nombre: 'Nombre',
+  direccion: 'Dirección',
+  latitud: 'Latitud',
+  longitud: 'Longitud',
+  ubicacion: 'Ubicación (una columna)',
+  asignadoA: 'Usuario asignado',
+  visitado: 'Marca de visitado',
+  telefono: 'Teléfono',
+  codigo: 'Código',
+  texto: 'Texto de la pregunta',
+  tipo: 'Tipo',
+  opciones: 'Opciones',
+  orden: 'Orden',
+  obligatoria: 'Obligatoria',
+  activa: 'Activa',
+  ayuda: 'Ayuda',
+  pregunta: 'Pregunta',
+  dependeDe: 'Depende de la pregunta',
+  valor: 'Valor esperado',
+  operador: 'Operador',
+  accion: 'Acción',
+  cliente: 'Cliente',
+  usuario: 'Usuario',
+  inicio: 'Inicio',
+  fin: 'Fin / fecha',
+  distancia: 'Distancia',
+  precision: 'Precisión GPS',
+  estado: 'Estado',
+  duracion: 'Duración',
+  visita: 'Visita',
+  preguntaTexto: 'Texto de la pregunta',
+  respuesta: 'Respuesta',
+  fecha: 'Fecha',
+  titulo: 'Título',
+  authId: 'Id de usuario (auth)',
+  email: 'Correo',
+}
+
+function TableCard({ k, t }: { k: keyof Schema; t: ResolvedTable }) {
+  const spec = schema[k]
+  const required = new Set<string>(spec.required)
+  const fields = Object.keys(spec.fields)
+  const sinUbicacion = k === 'clientes' && !(t.columns as Record<string, string>).ubicacion &&
+    !((t.columns as Record<string, string>).latitud && (t.columns as Record<string, string>).longitud)
+  const ok = t.table && t.missingRequired.length === 0 && !sinUbicacion
+  const optional = k === 'resultados' || k === 'perfiles' || k === 'reglas'
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center gap-3 border-b border-line p-4">
+        <div
+          className={cn(
+            'grid size-9 place-items-center rounded-xl',
+            ok ? 'bg-emerald-500/12 text-emerald-600' : t.table || optional ? 'bg-amber-500/15 text-amber-600' : 'bg-red-500/12 text-red-600',
+          )}
+        >
+          {ok ? <CircleCheck className="size-5" /> : t.table || optional ? <TriangleAlert className="size-5" /> : <CircleAlert className="size-5" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">{TITULOS[k]}</p>
+          <p className="truncate text-sm text-muted">
+            {t.table ? (
+              <>
+                Tabla <code className="rounded bg-soft px-1 font-mono text-[13px] text-fg">{t.table}</code>
+              </>
+            ) : (
+              <>No se encontró ({spec.table.join(', ')})</>
+            )}
+          </p>
+        </div>
+        {t.table && !t.verified && <Badge tone="warning">Sin verificar</Badge>}
+      </div>
+      {t.table && (
+        <dl className="divide-y divide-line text-sm">
+          {fields.map((f) => {
+            const col = (t.columns as Record<string, string | undefined>)[f]
+            return (
+              <div key={f} className="flex items-center justify-between gap-3 px-4 py-2">
+                <dt className="text-muted">
+                  {CAMPOS[f] ?? f}
+                  {required.has(f) && <span className="text-red-500"> *</span>}
+                </dt>
+                <dd>
+                  {col ? (
+                    <code className="rounded bg-soft px-1.5 py-0.5 font-mono text-[13px]">{col}</code>
+                  ) : (
+                    <span className={required.has(f) ? 'font-semibold text-red-600' : 'text-muted'}>
+                      {required.has(f) ? 'Falta' : '—'}
+                    </span>
+                  )}
+                </dd>
+              </div>
+            )
+          })}
+        </dl>
+      )}
+      {sinUbicacion && t.table && (
+        <p className="border-t border-line bg-red-500/5 px-4 py-2.5 text-sm text-red-700 dark:text-red-300">
+          No se encontraron columnas de ubicación (latitud/longitud).
+        </p>
+      )}
+      {t.error && (
+        <p className="border-t border-line bg-amber-500/5 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300">{t.error}</p>
+      )}
+      {t.allColumns && (
+        <details className="border-t border-line px-4 py-2.5 text-sm">
+          <summary className="cursor-pointer text-muted">Columnas de la tabla ({t.allColumns.length})</summary>
+          <p className="mt-2 font-mono text-[12px] break-words text-muted">{t.allColumns.join(', ')}</p>
+        </details>
+      )}
+    </Card>
+  )
+}
+
+export function DiagnosticoPage() {
+  const user = useUser()
+  const queryClient = useQueryClient()
+  const { data: ctx, isPending, error, refetch } = useSchema()
+  const { clientes } = useClientes()
+  const { formulario } = useFormulario()
+  const [busy, setBusy] = useState(false)
+
+  const redetectar = async () => {
+    setBusy(true)
+    try {
+      clearSchemaCache()
+      const fresh = await loadSchema(user, { force: true })
+      queryClient.setQueryData(queryKeys.schema(user.id), fresh)
+      await queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] !== 'schema' })
+      toast.success('Detección actualizada')
+    } catch (err) {
+      toast.error(String((err as Error).message ?? err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const copiar = async () => {
+    const reporte = {
+      fecha: new Date().toISOString(),
+      usuario: { id: user.id, email: user.email },
+      tablas: ctx?.tables,
+      filtroClientes: ctx?.owner,
+      perfil: ctx?.perfil ? { encontrado: true } : null,
+      conteos: {
+        clientes: clientes?.length ?? null,
+        clientesConUbicacion: clientes?.filter((c) => c.location).length ?? null,
+        preguntas: formulario?.questions.length ?? null,
+        reglas: formulario?.rules.length ?? null,
+      },
+    }
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(reporte, null, 2))
+      toast.success('Reporte copiado')
+    } catch {
+      toast.error('No se pudo copiar')
+    }
+  }
+
+  return (
+    <div className="pb-10">
+      <TopBar title="Verificar conexión" subtitle="Tablas y columnas detectadas en Supabase" backTo="/perfil" />
+      <div className="mx-auto max-w-3xl space-y-4 px-4 pt-4 sm:px-6">
+        <p className="text-sm text-muted">
+          La app se adapta a tu base de datos sin cambiarla. Aquí ves qué tabla y columna usa para cada dato. Si algo está
+          mal, edita <code className="rounded bg-soft px-1 font-mono">src/config/schema.ts</code> dejando solo el nombre
+          correcto.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={redetectar} loading={busy} icon={<RotateCw className="size-4" />}>
+            Volver a detectar
+          </Button>
+          <Button variant="secondary" onClick={copiar} icon={<ClipboardCopy className="size-4" />}>
+            Copiar reporte
+          </Button>
+        </div>
+
+        {error ? (
+          <ErrorState error={error} onRetry={refetch} />
+        ) : isPending || !ctx ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-40 rounded-2xl" />
+            ))}
+          </div>
+        ) : (
+          <>
+            <Card className="space-y-2 p-4 text-sm">
+              <p className="font-semibold">Tus datos</p>
+              <p className="text-muted">
+                {ctx.owner ? (
+                  <>
+                    Clientes filtrados por <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.owner.column}</code>{' '}
+                    = tu {ctx.owner.via === 'email' ? 'correo' : ctx.owner.via === 'perfil' ? 'id de usuario (tabla de usuarios)' : 'id de usuario (uuid)'}
+                    {ctx.owner.matched ? '.' : ', pero no hay clientes con ese valor.'}
+                  </>
+                ) : (
+                  'No se encontró una columna de usuario en clientes: se muestran los que permitan las políticas RLS.'
+                )}
+              </p>
+              <p className="text-muted">
+                Clientes: <strong className="text-fg">{clientes?.length ?? '…'}</strong> · con ubicación:{' '}
+                <strong className="text-fg">{clientes?.filter((c) => c.location).length ?? '…'}</strong> · preguntas:{' '}
+                <strong className="text-fg">{formulario?.questions.length ?? '…'}</strong> · reglas:{' '}
+                <strong className="text-fg">{formulario?.rules.length ?? '…'}</strong>
+              </p>
+            </Card>
+            {(Object.keys(ctx.tables) as (keyof Schema)[]).map((k) => (
+              <TableCard key={k} k={k} t={ctx.tables[k] as ResolvedTable} />
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

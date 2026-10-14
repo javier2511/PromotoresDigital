@@ -1,0 +1,227 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Tema: cambia la marca editando la escala "brand".
+   --------------------------------------------------------------------------- */
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+
+  /* Pines del mapa y punto de ubicación (azul tipo Google Maps) */
+  --color-pin-pending: #ea4335;
+  --color-pin-visited: #16a34a;
+  --color-me: #1a73e8;
+
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -4px rgb(15 23 42 / 0.08);
+  --shadow-float: 0 8px 30px -6px rgb(15 23 42 / 0.25);
+
+  --animate-pop: pop 360ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  --animate-rise: rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-shake: shake 420ms ease-in-out both;
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20%,
+    60% {
+      transform: translateX(-6px);
+    }
+    40%,
+    80% {
+      transform: translateX(6px);
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Colores semánticos (claro / oscuro) */
+:root {
+  --bg: #f4f5fa;
+  --card: #ffffff;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --line: #e6e8f0;
+  --soft: #eef0f6;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0f1a;
+    --card: #131a2a;
+    --fg: #e8ebf3;
+    --muted: #94a0b8;
+    --line: #232c40;
+    --soft: #1a2234;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-soft: var(--soft);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  button,
+  [role='button'] {
+    cursor: pointer;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+  dialog::backdrop {
+    background: rgb(15 23 42 / 0.45);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@layer utilities {
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Mapa: punto azul de "mi ubicación" (estilo Google Maps)
+   --------------------------------------------------------------------------- */
+.me-dot {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+.me-dot__core {
+  position: absolute;
+  inset: 3px;
+  border-radius: 9999px;
+  background: var(--color-me);
+  border: 3px solid #fff;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.35);
+  z-index: 2;
+}
+.me-dot__pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: var(--color-me);
+  opacity: 0.35;
+  animation: me-pulse 2s ease-out infinite;
+}
+.me-dot__beam {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: 56px;
+  height: 56px;
+  margin-left: -28px;
+  transform-origin: 50% 100%;
+  background: radial-gradient(circle at 50% 100%, rgb(26 115 232 / 0.45), rgb(26 115 232 / 0) 70%);
+  clip-path: polygon(50% 100%, 12% 0, 88% 0);
+  z-index: 1;
+  pointer-events: none;
+}
+.me-dot--stale .me-dot__core {
+  background: #9aa0a6;
+}
+.me-dot--stale .me-dot__pulse {
+  display: none;
+}
+@keyframes me-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+/* Pin seleccionado (marcador HTML con rebote) */
+.pin-selected {
+  transform-origin: 50% 100%;
+  animation: pin-drop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  filter: drop-shadow(0 6px 8px rgb(0 0 0 / 0.3));
+}
+@keyframes pin-drop {
+  from {
+    transform: translateY(-18px) scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Controles de MapLibre más discretos */
+.maplibregl-ctrl-attrib {
+  font-size: 10px !important;
+  background: rgb(255 255 255 / 0.75) !important;
+}
+.maplibregl-ctrl-bottom-left,
+.maplibregl-ctrl-bottom-right {
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
