@@ -14,22 +14,23 @@ declare
   faltantes text[] := array[]::text[];
 begin
   if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'visitas'
-                 and column_name in ('latitud', 'lat', 'latitud_visita', 'latitud_inicio')) then
+                 and column_name in ('latitud', 'lat', 'latitud_visita', 'lat_visita', 'latitud_inicio')) then
     alter table public.visitas add column latitud double precision;
     faltantes := array_append(faltantes, 'latitud');
   end if;
   if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'visitas'
-                 and column_name in ('longitud', 'lng', 'lon', 'longitud_visita', 'longitud_inicio')) then
+                 and column_name in ('longitud', 'lng', 'lon', 'longitud_visita', 'lng_visita', 'lon_visita', 'longitud_inicio')) then
     alter table public.visitas add column longitud double precision;
     faltantes := array_append(faltantes, 'longitud');
   end if;
   if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'visitas'
-                 and column_name in ('distancia', 'distancia_m', 'distancia_metros', 'metros', 'distance')) then
+                 and column_name in ('distancia', 'distancia_m', 'distancia_metros', 'distancia_cliente',
+                                     'distancia_visita', 'distancia_tienda', 'metros', 'distance')) then
     alter table public.visitas add column distancia_m integer;
     faltantes := array_append(faltantes, 'distancia_m');
   end if;
   if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'visitas'
-                 and column_name in ('precision', 'precision_m', 'exactitud', 'accuracy')) then
+                 and column_name in ('precision', 'precision_m', 'precision_gps', 'precision_visita', 'exactitud', 'accuracy')) then
     alter table public.visitas add column precision_m integer;
     faltantes := array_append(faltantes, 'precision_m');
   end if;
