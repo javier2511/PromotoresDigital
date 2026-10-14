@@ -5,11 +5,9 @@ import {
   columnaObligatoria,
   columnaPorValor,
   esErrorDeDato,
-  esSoloHora,
   insertarConRecuperacion,
   localIso,
   soloHora,
-  valorFecha,
 } from './insercion'
 
 const err = (message: string, code = '22P02', details = '') =>
@@ -20,14 +18,6 @@ describe('fechas y horas', () => {
   it('formatos', () => {
     expect(localIso(d)).toMatch(/^2026-10-14T09:05:07[+-]\d{2}:\d{2}$/)
     expect(soloHora(d)).toBe('09:05:07')
-  })
-  it('columnas de solo hora', () => {
-    expect(esSoloHora('hora_inicio')).toBe(true)
-    expect(esSoloHora('horaFin')).toBe(true)
-    expect(esSoloHora('fecha_hora')).toBe(false)
-    expect(esSoloHora('fecha_inicio')).toBe(false)
-    expect(valorFecha('hora', d)).toBe('09:05:07')
-    expect(valorFecha('fecha', d)).toMatch(/^2026-10-14T/)
   })
 })
 
@@ -146,5 +136,19 @@ describe('insertarConRecuperacion', () => {
     )
     expect(r.error?.code).toBe('42501')
     expect(t.enviados.length).toBe(1)
+  })
+
+  it('si el usuario no existe en la tabla relacionada, conserva ese error (no el de tipo)', async () => {
+    const t = tabla((f) =>
+      String(f.id_promotor).includes('@')
+        ? err(`invalid input syntax for type uuid: "${String(f.id_promotor)}"`)
+        : err('insert or update on table "visitas" violates foreign key constraint "visitas_id_promotor_fkey"', '23503', 'Key (id_promotor)=(uuid-1) is not present in table "promotores".'),
+    )
+    const r = await insertarConRecuperacion(
+      [{ id_cliente: '1', id_promotor: 'uuid-1' }],
+      { esenciales: ['id_cliente'], quitarPrimero: [], usuario: { columna: 'id_promotor', alternativas: ['uuid-1', 'a@b.com'] } },
+      t.enviar,
+    )
+    expect(r.error?.code).toBe('23503')
   })
 })

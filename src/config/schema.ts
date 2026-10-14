@@ -83,6 +83,13 @@ export type VisitaField =
   | 'estado'
   | 'duracion'
   | 'realizada'
+  | 'asignacion'
+  | 'finHora'
+  | 'checkin'
+  | 'fechaCheckin'
+  | 'latitudCheckin'
+  | 'longitudCheckin'
+  | 'ubicacionCheckin'
 
 export type RespuestaField =
   | 'id'
@@ -98,6 +105,8 @@ export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha'
 
 export type PerfilField = 'id' | 'authId' | 'email' | 'nombre'
 
+export type AsignacionField = 'id' | 'cliente' | 'usuario' | 'fecha' | 'orden' | 'estatus'
+
 export interface Schema {
   clientes: TableSpec<ClienteField>
   preguntas: TableSpec<PreguntaField>
@@ -106,6 +115,7 @@ export interface Schema {
   respuestas: TableSpec<RespuestaField>
   resultados: TableSpec<ResultadoField>
   perfiles: TableSpec<PerfilField>
+  asignaciones: TableSpec<AsignacionField>
 }
 
 export const schema: Schema = {
@@ -113,7 +123,8 @@ export const schema: Schema = {
   clientes: {
     table: ['clientes', 'lista_clientes', 'clientes_promotor', 'cliente', 'tiendas', 'puntos_venta'],
     fields: {
-      id: ['id', 'id_cliente', 'cliente_id', 'uuid'],
+      // id_cliente primero: es la llave con la que asignaciones y visitas se refieren al cliente.
+      id: ['id_cliente', 'cliente_id', 'id', 'uuid'],
       nombre: [
         'nombre',
         'nombre_cliente',
@@ -182,7 +193,7 @@ export const schema: Schema = {
   reglas: {
     table: ['preguntas_reglas', 'reglas_preguntas', 'reglas'],
     fields: {
-      id: ['id'],
+      id: ['id', 'id_regla'],
       // Pregunta que se muestra u oculta.
       pregunta: [
         'pregunta_destino_id',
@@ -210,6 +221,8 @@ export const schema: Schema = {
         'id_pregunta',
       ],
       valor: [
+        'valor_activador',
+        'activador',
         'valor',
         'respuesta',
         'respuesta_esperada',
@@ -239,7 +252,9 @@ export const schema: Schema = {
       cliente: ['cliente_id', 'id_cliente', 'cliente'],
       usuario: COLUMNAS_USUARIO,
       inicio: ['fecha_inicio', 'hora_inicio', 'fecha_hora_inicio', 'inicio', 'inicio_visita', 'started_at', 'check_in'],
-      fin: ['fecha_fin', 'hora_fin', 'fecha_hora_fin', 'fin', 'fin_visita', 'fecha_visita', 'fecha', 'finished_at', 'check_out'],
+      fin: ['fecha_fin', 'fecha_hora_fin', 'fin', 'fin_visita', 'fecha_visita', 'fecha', 'finished_at', 'check_out'],
+      // Segunda columna de fin (si existe además de la anterior).
+      finHora: ['hora_fin'],
       latitud: ['latitud', 'lat', 'latitud_visita', 'lat_visita', 'latitud_inicio'],
       longitud: ['longitud', 'lng', 'lon', 'longitud_visita', 'lng_visita', 'lon_visita', 'longitud_inicio'],
       ubicacion: ['ubicacion', 'ubicacion_visita', 'coordenadas', 'coordenadas_visita', 'latlng'],
@@ -250,6 +265,8 @@ export const schema: Schema = {
         'distancia_cliente',
         'distancia_visita',
         'distancia_tienda',
+        'distancia_checkin_m',
+        'distancia_checkin',
         'metros',
         'distance',
       ],
@@ -267,6 +284,13 @@ export const schema: Schema = {
         'visita_terminada',
         'terminada',
       ],
+      asignacion: ['id_asignacion', 'asignacion_id'],
+      // Check-in (como lo guardaba FlutterFlow): al iniciar la visita.
+      checkin: ['checkin_realizado'],
+      fechaCheckin: ['fecha_checkin', 'hora_checkin'],
+      latitudCheckin: ['latitud_checkin', 'lat_checkin'],
+      longitudCheckin: ['longitud_checkin', 'lng_checkin', 'lon_checkin'],
+      ubicacionCheckin: ['ubicacion_checkin'],
     },
     required: ['cliente'],
   },
@@ -308,7 +332,7 @@ export const schema: Schema = {
       usuario: COLUMNAS_USUARIO,
       cliente: ['cliente_id', 'id_cliente'],
       titulo: ['titulo', 'indicador', 'concepto', 'kpi', 'metrica', 'nombre', 'descripcion'],
-      fecha: ['fecha', 'periodo', 'mes', 'semana', 'created_at'],
+      fecha: ['fecha', 'fecha_visita', 'periodo', 'mes', 'semana', 'fecha_actualizacion', 'created_at'],
     },
     required: [],
   },
@@ -317,12 +341,29 @@ export const schema: Schema = {
   perfiles: {
     table: ['usuarios', 'promotores', 'perfiles', 'profiles', 'users'],
     fields: {
-      id: ['id'],
+      id: ['id', 'id_promotor', 'id_usuario', 'promotor_id', 'usuario_id'],
       authId: ['user_id', 'auth_id', 'uid', 'id_auth', 'auth_user_id'],
       email: ['email', 'correo', 'correo_electronico', 'mail'],
       nombre: ['nombre', 'nombre_completo', 'full_name', 'name', 'display_name', 'nombres'],
     },
     required: ['id'],
+  },
+
+  /**
+   * Opcional: asignaciones de clientes a cada promotor. Si existe, la lista de clientes, el avance y la marca
+   * de visitado salen de aquí (estatus), y al finalizar una visita su asignación pasa a "Completada".
+   */
+  asignaciones: {
+    table: ['asignaciones', 'asignacion', 'asignaciones_clientes', 'clientes_asignados'],
+    fields: {
+      id: ['id_asignacion', 'asignacion_id', 'id'],
+      cliente: ['id_cliente', 'cliente_id', 'cliente'],
+      usuario: COLUMNAS_USUARIO,
+      fecha: ['fecha_asignada', 'fecha_asignacion', 'fecha', 'fecha_visita'],
+      orden: ['orden_visita', 'orden', 'secuencia'],
+      estatus: ['estatus', 'estado', 'status'],
+    },
+    required: ['cliente', 'usuario'],
   },
 }
 
@@ -350,10 +391,51 @@ export const VALOR_VISITADO_TEXTO = 'visitado'
 export const VALOR_ESTADO_VISITA = 'finalizada'
 
 /**
- * Valor de visitas.visita_realizada (o similar) al finalizar. Si la columna no es booleana, la app prueba
- * 1, "Sí", "Si"… hasta que la base lo acepte.
+ * Valor de visitas.visita_realizada (o similar) cuando ninguna pregunta lo define (ver RESPUESTAS_EN_VISITA).
+ * Si la columna no es booleana, la app prueba 1, "Sí", "Si"… hasta que la base lo acepte.
  */
 export const VALOR_VISITA_REALIZADA = true
+
+/** Estatus de asignaciones (sin importar mayúsculas ni acentos). */
+export const ESTATUS_ASIGNACION_COMPLETADA = ['completada', 'completado', 'visitada', 'visitado', 'realizada', 'finalizada']
+/** Asignaciones con estos estatus no se muestran ni cuentan en el avance. */
+export const ESTATUS_ASIGNACION_OCULTA = ['cancelada', 'cancelado']
+/** Valor que se escribe en asignaciones.estatus al finalizar la visita (debe estar en tu lista permitida). */
+export const VALOR_ASIGNACION_COMPLETADA = 'Completada'
+
+/** Valores que se guardan en las preguntas Sí/No (si la pregunta no trae sus propias opciones). */
+export const RESPUESTA_SI = 'Si'
+export const RESPUESTA_NO = 'No'
+
+/**
+ * RESPUESTAS QUE TAMBIÉN SE GUARDAN EN LA FILA DE LA VISITA
+ * Además de la tabla de respuestas, estas columnas de visitas se llenan con la respuesta de una pregunta
+ * (la primera respondida cuyo texto contenga TODAS las palabras de algún grupo). Si la columna no existe
+ * en tu tabla, se ignora.
+ *  - tipo 'si_no': "Si"/"Ya la tenía" → true, "No" → false (otras respuestas no se guardan).
+ *  - siFalta: valor cuando ninguna de esas preguntas se respondió (p. ej. quedó oculta).
+ */
+export interface RespuestaEnVisita {
+  columna: string
+  preguntas: string[][]
+  tipo: 'si_no' | 'texto'
+  siFalta?: boolean | string
+}
+
+export const RESPUESTAS_EN_VISITA: RespuestaEnVisita[] = [
+  { columna: 'visita_realizada', preguntas: [['se realizo la visita']], tipo: 'si_no', siFalta: false },
+  {
+    columna: 'motivo_no_visita',
+    preguntas: [['por que no fue posible realizar la visita'], ['por que no fue posible localizar']],
+    tipo: 'texto',
+  },
+  { columna: 'usaba_app', preguntas: [['ya usa la app']], tipo: 'si_no' },
+  { columna: 'entendio_beneficios_digital', preguntas: [['beneficios de la app']], tipo: 'si_no' },
+  { columna: 'app_instalada', preguntas: [['capacitaci', 'instal']], tipo: 'si_no' },
+  { columna: 'realizo_pedido_digital', preguntas: [['realizo un pedido digital']], tipo: 'si_no' },
+  { columna: 'motivo_no_pedido', preguntas: [['realizar el pedido digital']], tipo: 'texto' },
+  { columna: 'comentarios', preguntas: [['comentario']], tipo: 'texto' },
+]
 
 /**
  * INFORMACIÓN DEL CLIENTE (ficha del cliente)
@@ -373,9 +455,13 @@ export interface CampoInfoCliente {
 export const INFO_CLIENTE: CampoInfoCliente[] = [
   { etiqueta: 'Saldo aprox. en puntos', tipo: 'destacado', palabras: [['saldo']] },
   { etiqueta: 'Status autogestión', tipo: 'dato', palabras: [['autogestion']] },
-  { etiqueta: 'Inscrito en Premia', tipo: 'dato', palabras: [['premia']] },
-  { etiqueta: 'Cuponera', tipo: 'dato', columnas: ['cuponera'], palabras: [['cuponera']] },
-  { etiqueta: 'Status cuponera', tipo: 'dato', palabras: [['status', 'cuponera'], ['estatus', 'cuponera']] },
+  { etiqueta: 'Inscrito en Premia', tipo: 'dato', palabras: [['inscrito'], ['premia'], ['loyalty']] },
+  { etiqueta: 'Cuponera', tipo: 'dato', columnas: ['cuponera'], palabras: [['cuponera', 'segmento'], ['cuponera']] },
+  {
+    etiqueta: 'Status cuponera',
+    tipo: 'dato',
+    palabras: [['status', 'cuponera'], ['estatus', 'cuponera'], ['cuponera', 'estado']],
+  },
   { etiqueta: 'Canal', tipo: 'dato', columnas: ['canal', 'canal_venta', 'canal_de_venta'], palabras: [['canal']] },
   { etiqueta: 'Canjes', tipo: 'metrica', palabras: [['canje']] },
   { etiqueta: 'Promos', tipo: 'metrica', palabras: [['promos'], ['promociones'], ['promo', 'mes']] },

@@ -1,6 +1,6 @@
 import { OBLIGATORIAS_POR_DEFECTO, parseOptions, parseQuestionType, type Question } from '../lib/questions'
 import { indicePreguntas, inferirColumnasRegla, type ColumnasRegla } from '../lib/reglas-columnas'
-import { parseAction, parseOperator, type Rule } from '../lib/rules'
+import { esCualquiera, parseAction, parseOperator, type Rule } from '../lib/rules'
 import type { SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { isNumeric, normalize, toBoolean } from '../lib/text'
@@ -86,8 +86,8 @@ function toRules(
   const rawValue = c.valor ? row[c.valor] : null
   const value = rawValue === null || rawValue === undefined ? '' : String(rawValue)
   let operator = parseOperator(c.operador ? row[c.operador] : null)
-  // "Igual a" sin valor: basta con que la pregunta esté respondida.
-  if (operator === 'eq' && value.trim() === '') operator = 'answered'
+  // "Igual a" sin valor o con "*": basta con que la pregunta esté respondida.
+  if (operator === 'eq' && (value.trim() === '' || esCualquiera(value))) operator = 'answered'
   const action = parseAction(c.accion ? row[c.accion] : null)
 
   const rules: Rule[] = []

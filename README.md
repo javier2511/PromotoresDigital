@@ -101,15 +101,29 @@ columnas (por ejemplo `latitud`/`lat`, `user_id`/`usuario_id`/`email`, `visitado
 
 ### Cómo escribe en tu base (igual que FlutterFlow)
 
+**Con tabla `asignaciones`** (tu caso): la lista del promotor son sus asignaciones (`id_promotor` = su usuario).
+Un cliente está *pendiente* si tiene una asignación Pendiente / En proceso / Reagendada y *visitado* si su
+asignación está Completada; las Canceladas no se muestran ni cuentan en el avance. Los clientes se identifican
+por `id_cliente` (el texto que usan asignaciones y visitas), no por el `id` numérico.
+
 Al finalizar una visita la app:
 
-1. Inserta una fila en **visitas** con el cliente, el usuario, inicio y fin, coordenadas, distancia, estado y
-   `visita_realizada = true` (solo en las columnas que existan).
-2. Inserta en **respuestas** una fila por cada pregunta visible respondida (pregunta, respuesta y visita).
-   Las respuestas de opción múltiple se guardan como texto separado por comas.
-3. Marca al cliente como visitado en **clientes** (si la columna es booleana guarda `true`; si es texto,
-   reutiliza el valor que ya usas, p. ej. `Visitado`). Si tu tabla de clientes no tiene esa columna, se
-   considera visitado a todo cliente que tenga una visita registrada.
+1. Inserta una fila en **visitas** con `id_cliente`, `id_asignacion` (la asignación pendiente), `id_promotor`,
+   `hora_inicio`, `hora_fin`/`fecha_fin`, `latitud_visita`/`longitud_visita` y el check-in como lo hacía
+   FlutterFlow (`checkin_realizado`, `fecha_checkin`, `latitud_checkin`, `longitud_checkin`,
+   `ubicacion_checkin` y `distancia_checkin_m`, la distancia en metros al cliente).
+   Además llena columnas con respuestas del formulario (lista `RESPUESTAS_EN_VISITA` en
+   `src/config/schema.ts`): `visita_realizada` (= "Se realizo la visita"; `false` si la tienda no se localizó),
+   `motivo_no_visita`, `usaba_app`, `entendio_beneficios_digital`, `app_instalada`, `realizo_pedido_digital`,
+   `motivo_no_pedido` y `comentarios`.
+2. Inserta en **respuestas** una fila por cada pregunta visible respondida (`id_visita`, `id_pregunta`, el texto
+   en `pregunta` y la `respuesta`). Las Sí/No se guardan como `Si`/`No`; las de opción múltiple como texto
+   separado por comas.
+3. Pasa la **asignación** a `Completada`. (Sin tabla de asignaciones: marca la columna `visitado` de clientes
+   o, si no existe, cuenta como visitado a todo cliente con una visita registrada.)
+
+La primera vez que un usuario entra, si no existe en **promotores** la app agrega su fila (id, correo y
+nombre); sin ella Supabase rechaza la visita porque `visitas.id_promotor` debe existir en `promotores`.
 
 Si tu tabla tiene columnas obligatorias que la app no conoce (por ejemplo `hora`, `fecha`, `id_cliente`), las
 llena según su nombre; si una columna es de tipo `time` envía solo la hora; y si la base rechaza un dato
@@ -153,7 +167,9 @@ Cada regla dice: *muestra la pregunta X cuando la respuesta a la pregunta Y es V
 - Operadores aceptados (columna opcional `operador`): `=`, `!=`, `>`, `>=`, `<`, `<=`, `contiene`,
   `en` (lista separada por comas), `respondida`, `vacía`.
 - Acción opcional (`accion`): `mostrar` (por defecto) u `ocultar`.
-- Varias reglas sobre la misma pregunta Y = basta que se cumpla una; sobre preguntas distintas = todas.
+- Varias reglas para la misma pregunta = basta con que se cumpla **cualquiera** (es un flujo: a la pregunta 8
+  se llega desde la 4 = "Si", desde la 5 respondida, etc.).
+- `*` en el valor (`valor_activador = '*'`) = cualquier respuesta.
 - Si una pregunta queda oculta, su respuesta no se guarda y no cuenta para otras reglas.
 - También funciona el formato "salto": `pregunta_id` + `respuesta` + `siguiente_pregunta_id`.
 - La app deduce qué columna es cuál por su nombre aunque no sean los esperados (p. ej. `mostrar_pregunta` +
@@ -164,8 +180,9 @@ En **Perfil → Verificar conexión → Reglas de las preguntas** ves cuántas r
 tomó para cada parte, cómo interpretó cada regla ("Se muestra P3 si P1 = «Sí»") y cuáles no pudo usar y por
 qué. Una regla también puede mostrar varias preguntas a la vez (`"3, 5"` o un arreglo `{3,5}`).
 
-- Si dice **"No se leyó ninguna regla"** pero tu tabla sí tiene filas, falta el permiso de lectura: ejecuta
-  `supabase/05_permiso_leer_preguntas.sql` (solo da permiso de leer preguntas y reglas).
+- Si dice **"No se leyó ninguna regla"** pero tu tabla sí tiene filas, falta el permiso de lectura (tu
+  `preguntas_reglas` tiene RLS activo sin ninguna política): ejecuta `supabase/05_permiso_leer_preguntas.sql`
+  (solo da permiso de leer las reglas).
 - Si dice que se aplican 0, comparte ese reporte (*Copiar reporte*, ya incluye tus reglas y preguntas) o el de
   `04_reporte_para_revisar.sql`.
 

@@ -1,3 +1,4 @@
+import { RESPUESTA_NO, RESPUESTA_SI } from '../config/schema'
 import { normalize, toBoolean } from './text'
 
 export type QuestionType = 'yesno' | 'single' | 'multi' | 'number' | 'date' | 'longtext' | 'text'
@@ -120,7 +121,7 @@ export function yesNoOptions(question: Question): [string, string] {
     const no = question.options.find((o) => toBoolean(o) === false)!
     return [yes, no]
   }
-  return ['Sí', 'No']
+  return [RESPUESTA_SI, RESPUESTA_NO]
 }
 
 export function isAnswered(value: AnswerValue | undefined): boolean {

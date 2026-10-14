@@ -25,7 +25,8 @@ export async function fetchResultados(
   // Orden estable para paginar: por fecha (más reciente primero) y desempate por id si existe.
   const order = (q: ReturnType<ReturnType<typeof supabase.from>['select']>) => {
     const byDate = t.columns.fecha ? q.order(t.columns.fecha, { ascending: false }) : q
-    return t.allColumns?.includes('id') ? byDate.order('id', { ascending: true }) : byDate
+    const idCol = t.allColumns?.find((c) => ['id', 'id_resultado', 'resultado_id'].includes(c))
+    return idCol ? byDate.order(idCol, { ascending: true }) : byDate
   }
 
   const userCol = t.columns.usuario

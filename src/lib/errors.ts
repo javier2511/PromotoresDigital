@@ -33,6 +33,11 @@ export function friendlyError(error: unknown): string {
   if (e.code === '42501' || /row-level security|permission denied/i.test(msg)) {
     return 'La base de datos no permitió la operación (permisos RLS). Avísale a tu administrador.'
   }
+  if (e.code === '23503' && /promotor|usuario|user/i.test(msg)) {
+    return 'Tu usuario no está dado de alta en la tabla de promotores. Avísale a tu administrador para que te agregue.'
+  }
+  if (e.code === '23503') return 'Un dato no existe en la tabla relacionada (llave foránea). Revisa el detalle técnico.'
+  if (e.code === '23502') return 'Falta un dato obligatorio en la base de datos. Revisa el detalle técnico.'
   if (/jwt expired|invalid jwt|refresh token/i.test(msg)) return 'Tu sesión expiró. Vuelve a iniciar sesión.'
   if (/password should be at least/i.test(msg)) return 'La contraseña debe tener al menos 6 caracteres.'
   if (/should be different from the old password/i.test(msg)) {

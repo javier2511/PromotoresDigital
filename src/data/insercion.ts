@@ -30,20 +30,6 @@ export function palabras(columna: string): string[] {
     .filter(Boolean)
 }
 
-/** ¿La columna guarda solo la hora? ("hora_inicio" sí; "fecha_hora" o "fecha" no). */
-export function esSoloHora(columna: string): boolean {
-  const p = palabras(columna)
-  return (
-    (p.includes('hora') || p.includes('time')) &&
-    !p.some((w) => ['fecha', 'date', 'timestamp', 'datetime', 'dia', 'at'].includes(w))
-  )
-}
-
-/** Fecha/hora con el formato que probablemente espera la columna según su nombre. */
-export function valorFecha(columna: string, fecha: Date): string {
-  return esSoloHora(columna) ? soloHora(fecha) : localIso(fecha)
-}
-
 /** Columna obligatoria que faltó: 'null value in column "hora" of relation "visitas"…'. */
 export function columnaObligatoria(error: ErrorPostgrest): string | null {
   return /column "([^"]+)"/.exec(error.message ?? '')?.[1] ?? null
@@ -83,6 +69,7 @@ const RECHAZA_VALOR = new Set(['22P02', '22007', '22008', '22003', '22001', '235
 
 /** Formas de decir "sí" según el tipo de la columna (booleano, número, texto o lista de valores). */
 export const VALORES_SI: unknown[] = [true, 1, 'Sí', 'Si', 'si', 'SI', 'S']
+export const VALORES_NO: unknown[] = [false, 0, 'No', 'no', 'NO', 'N']
 
 export interface Recuperacion {
   /** Columnas sin las que no tiene sentido guardar (nunca se quitan). */
@@ -125,6 +112,8 @@ export async function insertarConRecuperacion<T>(
   const formatoCambiado = new Set<string>()
   const rellenadas = new Set<string>()
   const quitadas = new Set<string>()
+  /** Error de permisos o de llave foránea del usuario: es más útil que el de tipo de la forma alternativa. */
+  let errorUsuario: PostgrestError | null = null
   const cambiar = (columna: string, valor: unknown) => {
     actuales = actuales.map((f) => ({ ...f, [columna]: valor }))
   }
@@ -174,9 +163,12 @@ export async function insertarConRecuperacion<T>(
         error.code === '42501'
           ? (rec.usuario?.columna ?? null)
           : columnaPorValor(error, fila, [rec.usuario?.columna, ...alternativas.keys(), ...Object.keys(fechas)])
+      if (columna && columna === rec.usuario?.columna && (error.code === '42501' || error.code === '23503')) {
+        errorUsuario ??= error
+      }
       if (columna && probarOtro(columna, fila)) continue
       // Ya se probaron todas las formas de identificar al usuario: es un tema de permisos o de datos.
-      if (columna && columna === rec.usuario?.columna) return { ...r, filas: actuales }
+      if (columna && columna === rec.usuario?.columna) return { ...r, error: errorUsuario ?? error, filas: actuales }
       if (columna && fechas[columna] && !formatoCambiado.has(columna)) {
         formatoCambiado.add(columna)
         cambiar(columna, String(fila[columna]).includes('T') ? soloHora(fechas[columna]) : localIso(fechas[columna]))

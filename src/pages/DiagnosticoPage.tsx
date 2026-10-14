@@ -9,7 +9,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { Skeleton } from '../components/ui/Skeleton'
-import { schema, type Schema } from '../config/schema'
+import { schema, VALOR_ASIGNACION_COMPLETADA, type Schema } from '../config/schema'
 import type { Formulario } from '../data/formulario'
 import { queryKeys, useClientes, useFormulario, useSchema } from '../data/hooks'
 import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
@@ -26,6 +26,7 @@ const TITULOS: Record<keyof Schema, string> = {
   respuestas: 'Respuestas',
   resultados: 'Resultados',
   perfiles: 'Usuarios (opcional)',
+  asignaciones: 'Asignaciones (opcional)',
 }
 
 const CAMPOS: Record<string, string> = {
@@ -60,6 +61,14 @@ const CAMPOS: Record<string, string> = {
   estado: 'Estado',
   duracion: 'Duración',
   realizada: 'Visita realizada',
+  asignacion: 'Asignación',
+  finHora: 'Hora de fin',
+  checkin: 'Check-in realizado',
+  fechaCheckin: 'Fecha de check-in',
+  latitudCheckin: 'Latitud check-in',
+  longitudCheckin: 'Longitud check-in',
+  ubicacionCheckin: 'Ubicación check-in',
+  estatus: 'Estatus',
   visita: 'Visita',
   preguntaTexto: 'Texto de la pregunta',
   respuesta: 'Respuesta',
@@ -346,7 +355,15 @@ export function DiagnosticoPage() {
             <Card className="space-y-2 p-4 text-sm">
               <p className="font-semibold">Tus datos</p>
               <p className="text-muted">
-                {ctx.owner?.error ? (
+                {ctx.tables.asignaciones.table && ctx.tables.asignaciones.columns.cliente && ctx.tables.asignaciones.columns.usuario ? (
+                  <>
+                    Clientes asignados en <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.tables.asignaciones.table}</code>{' '}
+                    (<code className="rounded bg-soft px-1 font-mono text-fg">{ctx.tables.asignaciones.columns.usuario}</code> = tu
+                    usuario). Visitado ={' '}
+                    <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.tables.asignaciones.columns.estatus ?? 'estatus'}</code>{' '}
+                    "{VALOR_ASIGNACION_COMPLETADA}".
+                  </>
+                ) : ctx.owner?.error ? (
                   <span className="text-red-700 dark:text-red-300">
                     La columna <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.owner.column}</code> de clientes no
                     se pudo comparar con tu usuario ({ctx.owner.error}). Por seguridad no se muestran clientes. Revisa qué valor

@@ -89,12 +89,39 @@ describe('visibleQuestions', () => {
     expect(changed.has('3')).toBe(false)
   })
 
-  it('varias reglas sobre la misma pregunta = cualquiera; sobre preguntas distintas = todas', () => {
+  it('varias reglas "mostrar" = basta con que se cumpla cualquiera (también desde preguntas distintas)', () => {
     const orSame = [rule('3', '1', 'A'), rule('3', '1', 'B')]
     expect(visibleQuestions(questions, orSame, { '1': 'B' }).has('3')).toBe(true)
-    const andDifferent = [rule('3', '1', 'A'), rule('3', '2', 'X')]
-    expect(visibleQuestions(questions, andDifferent, { '1': 'A' }).has('3')).toBe(false)
-    expect(visibleQuestions(questions, andDifferent, { '1': 'A', '2': 'X' }).has('3')).toBe(true)
+    const orDifferent = [rule('3', '1', 'A'), rule('3', '2', 'X')]
+    expect(visibleQuestions(questions, orDifferent, {}).has('3')).toBe(false)
+    expect(visibleQuestions(questions, orDifferent, { '1': 'A' }).has('3')).toBe(true)
+    expect(visibleQuestions(questions, orDifferent, { '2': 'X' }).has('3')).toBe(true)
+  })
+
+  it('flujo de preguntas_reglas real: "*" = cualquier respuesta, varias rutas a la misma pregunta', () => {
+    const qs = Array.from({ length: 9 }, (_, i) => q(String(i + 1), i + 1))
+    // 3 si 2=No · 4 si 2=Si · 5 si 4=No · 6 si 5=incidencia · 7 si 6=No · 8 si 4=Si | 7=* | 6=Si | 5=* · 9 si 8=*
+    const any = { operator: 'answered' as const }
+    const rules = [
+      rule('3', '2', 'No'),
+      rule('4', '2', 'Si'),
+      rule('5', '4', 'No'),
+      rule('6', '5', 'Presenta incidencia en la app'),
+      rule('7', '6', 'No'),
+      rule('8', '4', 'Si'),
+      rule('8', '7', '*', any),
+      rule('8', '6', 'Si'),
+      rule('8', '5', '*', any),
+      rule('9', '8', '*', any),
+    ]
+    const ver = (answers: Record<string, string>) => [...visibleQuestions(qs, rules, answers)].join(',')
+    expect(ver({})).toBe('1,2')
+    expect(ver({ '2': 'No' })).toBe('1,2,3')
+    expect(ver({ '2': 'si', '4': 'Si' })).toBe('1,2,4,8')
+    expect(ver({ '2': 'Si', '4': 'Si', '8': 'No' })).toBe('1,2,4,8,9')
+    expect(ver({ '2': 'Si', '4': 'No', '5': 'Presenta incidencia en la app' })).toBe('1,2,4,5,6,8')
+    // Si después cambia la 2 a "No", lo de la otra rama se oculta aunque tenga respuestas guardadas.
+    expect(ver({ '2': 'No', '4': 'Si', '8': 'No' })).toBe('1,2,3')
   })
 
   it('reglas de ocultar', () => {

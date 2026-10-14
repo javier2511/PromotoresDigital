@@ -44,11 +44,14 @@ export function resolverInfoCliente(
     .filter(({ i, peso }) => encontradas[i] === null && peso > 0)
     .sort((a, b) => b.peso - a.peso)
   for (const { campo, i } of porPalabras) {
-    const columna = disponibles.find(
-      (c) =>
-        !usadas.has(c) &&
-        campo.palabras!.some((grupo) => grupo.every((palabra) => claveColumna(c).includes(claveColumna(palabra)))),
-    )
+    // Los grupos de palabras se prueban en orden: el primero que encuentre columna gana.
+    let columna: string | undefined
+    for (const grupo of campo.palabras!) {
+      columna = disponibles.find(
+        (c) => !usadas.has(c) && grupo.every((palabra) => claveColumna(c).includes(claveColumna(palabra))),
+      )
+      if (columna) break
+    }
     if (columna) {
       encontradas[i] = columna
       usadas.add(columna)

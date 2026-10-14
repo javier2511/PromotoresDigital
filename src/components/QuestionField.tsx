@@ -31,7 +31,8 @@ function YesNo({ question, value, onChange }: FieldProps) {
         )}
       >
         {kind === 'yes' ? <Check className="size-5" strokeWidth={2.6} /> : <X className="size-5" strokeWidth={2.6} />}
-        {label}
+        {/* Se guarda "Si" (como en tus reglas), pero se muestra con acento. */}
+        {normalize(label) === 'si' ? 'Sí' : label}
       </button>
     )
   }

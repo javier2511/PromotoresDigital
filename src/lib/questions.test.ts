@@ -40,7 +40,7 @@ describe('respuestas', () => {
   it('respeta las etiquetas sí/no cargadas', () => {
     const question = { options: ['NO', 'SI'] } as Question
     expect(yesNoOptions(question)).toEqual(['SI', 'NO'])
-    expect(yesNoOptions({ options: [] as string[] } as Question)).toEqual(['Sí', 'No'])
+    expect(yesNoOptions({ options: [] as string[] } as Question)).toEqual(['Si', 'No'])
   })
   it('serializa opción múltiple como texto', () => {
     expect(serializeAnswer(['A', 'B'])).toBe('A, B')

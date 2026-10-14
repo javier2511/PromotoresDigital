@@ -38,6 +38,13 @@ const OPERATORS: [Operator, string[]][] = [
   ['empty', ['vacia', 'vacio', 'empty', 'null', 'is null', 'sin respuesta', 'no respondida']],
 ]
 
+/** Valores que significan "cualquier respuesta" (p. ej. valor_activador = "*"). */
+const CUALQUIERA = new Set(['*', '%', 'cualquiera', 'cualquier', 'any', 'todas', 'todos'])
+
+export function esCualquiera(value: unknown): boolean {
+  return CUALQUIERA.has(normalize(value))
+}
+
 export function parseOperator(raw: unknown): Operator {
   const n = normalize(raw)
   if (!n) return 'eq'
@@ -115,8 +122,8 @@ export function ruleMatches(rule: Rule, answer: AnswerValue | undefined): boolea
  * Calcula qué preguntas se ven con las respuestas actuales.
  *
  * - Una pregunta sin reglas "mostrar" siempre se ve.
- * - Con reglas "mostrar": se ve si se cumple al menos una regla por cada pregunta de la que depende
- *   (varias reglas sobre la misma pregunta = cualquiera de esos valores; sobre preguntas distintas = todas).
+ * - Con reglas "mostrar": se ve si se cumple CUALQUIERA de ellas (como un flujo: a la pregunta 8 se puede
+ *   llegar desde la 4 = "Si", desde la 5 respondida, etc.).
  * - Si se cumple alguna regla "ocultar", no se ve.
  * - La respuesta de una pregunta oculta cuenta como vacía (las reglas se encadenan).
  */
@@ -141,12 +148,7 @@ export function visibleQuestions(questions: Question[], rules: Rule[], answers: 
     if (hide.some((r) => ruleMatches(r, answerOf(r.source)))) return false
     const show = own.filter((r) => r.action === 'show')
     if (show.length === 0) return true
-    const bySource = new Map<string, Rule[]>()
-    for (const r of show) bySource.set(r.source, [...(bySource.get(r.source) ?? []), r])
-    for (const group of bySource.values()) {
-      if (!group.some((r) => ruleMatches(r, answerOf(r.source)))) return false
-    }
-    return true
+    return show.some((r) => ruleMatches(r, answerOf(r.source)))
   }
 
   // Se evalúa en orden; se repite por si alguna regla apunta a una pregunta posterior.

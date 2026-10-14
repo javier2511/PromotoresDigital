@@ -1,14 +1,22 @@
 import type { User } from '@supabase/supabase-js'
-import { VALOR_ESTADO_VISITA, VALOR_VISITA_REALIZADA, VALOR_VISITADO_TEXTO } from '../config/schema'
+import {
+  RESPUESTAS_EN_VISITA,
+  VALOR_ASIGNACION_COMPLETADA,
+  VALOR_ESTADO_VISITA,
+  VALOR_VISITA_REALIZADA,
+  VALOR_VISITADO_TEXTO,
+} from '../config/schema'
 import { serializeAnswer, isAnswered, type Answers, type Question } from '../lib/questions'
 import { ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
-import { visitadoValue, type Cliente } from './clientes'
+import { normalize, toBoolean } from '../lib/text'
+import { visitadoValue, whereUser, type Cliente } from './clientes'
 import {
   ErrorAlGuardar,
   insertarConRecuperacion,
+  localIso,
   palabras,
-  valorFecha,
+  VALORES_NO,
   VALORES_SI,
   type Recuperacion,
 } from './insercion'
@@ -77,11 +85,43 @@ function valorDeducido(columna: string, input: FinalizarVisitaInput, visitaId: I
   if (tiene('ubicacion', 'coordenadas', 'latlng')) return position ? `${position.lat},${position.lng}` : undefined
   if (tiene('estado', 'status', 'estatus')) return VALOR_ESTADO_VISITA
   if (tiene('duracion', 'minutos')) return Math.max(1, Math.round((Date.now() - startedAt) / 60000))
-  if (tiene('inicio', 'entrada', 'checkin')) return valorFecha(columna, new Date(startedAt))
+  if (tiene('inicio', 'entrada', 'checkin')) return localIso(new Date(startedAt))
   if (tiene('fecha', 'date', 'dia', 'hora', 'time', 'created', 'registro', 'fin', 'timestamp')) {
-    return valorFecha(columna, new Date())
+    return localIso(new Date())
   }
   return undefined
+}
+
+/** "Si" / "Ya la tenía" → true, "No" → false; otras respuestas (p. ej. "No aplica") → null. */
+function siNo(texto: string): boolean | null {
+  const b = toBoolean(texto)
+  if (b !== null) return b
+  return /^ya\b/.test(normalize(texto)) ? true : null
+}
+
+/** Columnas de visitas que se llenan con respuestas del formulario (RESPUESTAS_EN_VISITA). */
+export function respuestasEnVisita(
+  columnas: string[] | null,
+  questions: Question[],
+  visible: Set<string>,
+  answers: Answers,
+): Row {
+  const out: Row = {}
+  for (const m of RESPUESTAS_EN_VISITA) {
+    // Si no se conocen las columnas de la tabla (vacía), no se adivinan.
+    if (!columnas?.includes(m.columna)) continue
+    const respondida = m.preguntas
+      .map((grupo) => questions.find((q) => grupo.every((p) => normalize(q.text).includes(normalize(p)))))
+      .find((q) => q !== undefined && visible.has(q.key) && isAnswered(answers[q.key]))
+    let valor: unknown = null
+    if (respondida) {
+      const texto = serializeAnswer(answers[respondida.key])
+      valor = m.tipo === 'si_no' ? siNo(texto) : texto
+    }
+    valor ??= m.siFalta ?? null
+    if (valor !== null) out[m.columna] = valor
+  }
+  return out
 }
 
 async function insertVisita(input: FinalizarVisitaInput): Promise<Id | null> {
@@ -94,30 +134,66 @@ async function insertVisita(input: FinalizarVisitaInput): Promise<Id | null> {
   const fin = new Date()
   const row: Row = {}
   put(row, c.cliente, cliente.id)
+  put(row, c.asignacion, cliente.asignacion?.id)
   if (c.usuario) put(row, c.usuario, valoresUsuario(c.usuario, input)[0])
-  if (c.inicio) put(row, c.inicio, valorFecha(c.inicio, inicio))
-  if (c.fin) put(row, c.fin, valorFecha(c.fin, fin))
+  put(row, c.inicio, localIso(inicio))
+  put(row, c.fin, localIso(fin))
+  put(row, c.finHora, localIso(fin))
   if (position) {
     put(row, c.latitud, position.lat)
     put(row, c.longitud, position.lng)
     if (!c.latitud || !c.longitud) put(row, c.ubicacion, `${position.lat},${position.lng}`)
     if (position.distance !== null) put(row, c.distancia, Math.round(position.distance))
     put(row, c.precision, Math.round(position.accuracy))
+    // Check-in: la ubicación al iniciar la visita (mismo formato que usaba FlutterFlow).
+    put(row, c.checkin, true)
+    put(row, c.fechaCheckin, localIso(inicio))
+    put(row, c.latitudCheckin, position.lat)
+    put(row, c.longitudCheckin, position.lng)
+    put(row, c.ubicacionCheckin, `LatLng(lat: ${position.lat}, lng: ${position.lng})`)
   }
   put(row, c.estado, VALOR_ESTADO_VISITA)
   put(row, c.realizada, VALOR_VISITA_REALIZADA)
   put(row, c.duracion, Math.max(1, Math.round((fin.getTime() - startedAt) / 60000)))
+  // Respuestas que también van en la fila de la visita (p. ej. visita_realizada = "¿Se realizó la visita?").
+  const deRespuestas = respuestasEnVisita(v.allColumns, input.questions, input.visible, input.answers)
+  Object.assign(row, deRespuestas)
 
   const fechas: Record<string, Date> = {}
-  if (c.inicio) fechas[c.inicio] = inicio
-  if (c.fin) fechas[c.fin] = fin
+  for (const col of [c.inicio, c.fechaCheckin]) if (col) fechas[col] = inicio
+  for (const col of [c.fin, c.finHora]) if (col) fechas[col] = fin
+  // Columnas de sí/no: si no son booleanas se prueba 1/0, "Si"/"No"…
+  const alternativas: Record<string, unknown[]> = {}
+  for (const [col, valor] of Object.entries(row)) {
+    if (typeof valor === 'boolean') alternativas[col] = valor ? VALORES_SI : VALORES_NO
+  }
   const recuperacion: Recuperacion = {
     esenciales: [c.cliente],
     // Primero se sacrifica lo menos importante; la ubicación (evidencia de la visita) al final.
-    quitarPrimero: [c.estado, c.duracion, c.precision, c.inicio, c.ubicacion, c.realizada, c.fin, c.distancia, c.latitud, c.longitud, c.usuario],
+    quitarPrimero: [
+      c.estado,
+      c.duracion,
+      c.precision,
+      c.ubicacionCheckin,
+      ...Object.keys(deRespuestas),
+      c.checkin,
+      c.fechaCheckin,
+      c.latitudCheckin,
+      c.longitudCheckin,
+      c.inicio,
+      c.ubicacion,
+      c.realizada,
+      c.finHora,
+      c.fin,
+      c.asignacion,
+      c.distancia,
+      c.latitud,
+      c.longitud,
+      c.usuario,
+    ],
     rellenar: (columna) => valorDeducido(columna, input),
     usuario: c.usuario ? { columna: c.usuario, alternativas: valoresUsuario(c.usuario, input) } : undefined,
-    alternativas: c.realizada && VALOR_VISITA_REALIZADA === true ? { [c.realizada]: VALORES_SI } : {},
+    alternativas,
     fechas,
   }
 
@@ -161,7 +237,7 @@ async function insertRespuestas(input: FinalizarVisitaInput, visitaId: Id | null
       if (visitaId !== null) put(row, c.visita, visitaId)
       put(row, c.cliente, cliente.id)
       if (c.usuario) put(row, c.usuario, valoresUsuario(c.usuario, input)[0])
-      if (c.fecha) put(row, c.fecha, valorFecha(c.fecha, ahora))
+      put(row, c.fecha, localIso(ahora))
       return row
     })
   if (rows.length === 0) return 0
@@ -185,6 +261,27 @@ async function insertRespuestas(input: FinalizarVisitaInput, visitaId: Id | null
   return rows.length
 }
 
+/** Pasa la asignación del cliente a "Completada" (si los clientes se asignan por la tabla asignaciones). */
+async function completarAsignacion(input: FinalizarVisitaInput): Promise<string | null> {
+  const { ctx, cliente, user } = input
+  const a = ctx.tables.asignaciones
+  const c = a.columns
+  if (!a.table || !c.estatus || !c.cliente) return null
+  const update = supabase.from(a.table).update({ [c.estatus]: VALOR_ASIGNACION_COMPLETADA })
+  const filtrada =
+    c.id && cliente.asignacion?.id !== null && cliente.asignacion?.id !== undefined
+      ? update.eq(c.id, cliente.asignacion.id)
+      : c.usuario
+        ? whereUser(update.eq(c.cliente, cliente.id), c.usuario, ownerValueFor(c.usuario, ctx, user))
+        : update.eq(c.cliente, cliente.id)
+  const { data, error } = await filtrada.select(c.id ?? c.cliente)
+  if (error) throw error
+  if (!data || data.length === 0) {
+    return 'La visita se guardó, pero la base de datos no permitió marcar la asignación como completada (permisos RLS). Avísale a tu administrador.'
+  }
+  return null
+}
+
 async function marcarVisitado(input: FinalizarVisitaInput): Promise<string | null> {
   const { ctx, cliente, clientes } = input
   const t = ctx.tables.clientes
@@ -204,7 +301,8 @@ async function marcarVisitado(input: FinalizarVisitaInput): Promise<string | nul
 }
 
 /**
- * Guarda la visita: 1) fila en visitas, 2) respuestas visibles, 3) marca al cliente como visitado.
+ * Guarda la visita: 1) fila en visitas, 2) respuestas visibles, 3) marca al cliente como visitado (o su
+ * asignación como completada).
  * Si un paso falla, la visita ya guardada se recuerda en el borrador y el reintento la reutiliza
  * (no se crean visitas duplicadas).
  */
@@ -221,7 +319,8 @@ export async function finalizarVisita(input: FinalizarVisitaInput): Promise<Fina
   const respuestas = await insertRespuestas(input, visitaId)
   let warning: string | null = null
   try {
-    warning = await marcarVisitado(input)
+    const usaAsignaciones = Boolean(input.ctx.tables.asignaciones.table && input.ctx.tables.asignaciones.columns.estatus)
+    warning = usaAsignaciones ? await completarAsignacion(input) : await marcarVisitado(input)
   } catch {
     warning =
       'La visita y las respuestas se guardaron, pero no se pudo marcar al cliente como visitado. Avísale a tu administrador.'

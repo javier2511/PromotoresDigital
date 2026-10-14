@@ -7,11 +7,12 @@ import { useUser } from '../providers/AuthProvider'
 import { queryKeys, useSchema } from './hooks'
 import { insertarConRecuperacion } from './insercion'
 
-const intentoKey = (userId: string) => `pd.perfil.creado.${userId}`
+const intentoKey = (userId: string) => `pd.perfil.creado.v2.${userId}`
 
 /**
- * Para cuentas creadas desde "Crear cuenta": agrega su fila en la tabla de usuarios (si existe),
- * como hacía el registro de FlutterFlow. Se intenta una sola vez por usuario.
+ * Agrega la fila del usuario en la tabla de usuarios/promotores si aún no tiene (como hacía el registro de
+ * FlutterFlow). Sin esa fila las visitas no se pueden guardar cuando visitas.id_promotor apunta a esa tabla.
+ * Se intenta una sola vez por usuario y teléfono.
  */
 export async function crearPerfil(ctx: SchemaContext, user: User): Promise<boolean> {
   const t = ctx.tables.perfiles
@@ -23,7 +24,8 @@ export async function crearPerfil(ctx: SchemaContext, user: User): Promise<boole
   else if (c.id) fila[c.id] = user.id // tablas de usuarios cuyo id es el mismo de Supabase Auth
   if (c.email && user.email) fila[c.email] = user.email
   const nombre = user.user_metadata?.full_name
-  if (c.nombre && typeof nombre === 'string' && nombre.trim()) fila[c.nombre] = nombre.trim()
+  const nombreFinal = typeof nombre === 'string' && nombre.trim() ? nombre.trim() : user.email?.split('@')[0]
+  if (c.nombre && nombreFinal) fila[c.nombre] = nombreFinal
   const { error } = await insertarConRecuperacion(
     [fila],
     { esenciales: [c.authId ?? c.email], quitarPrimero: [c.id, c.nombre] },
@@ -41,7 +43,8 @@ export function useAsegurarPerfil() {
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    if (!ctx || ctx.perfil || user.user_metadata?.registro_app !== true) return
+    // Solo si la tabla se pudo leer (si no, "no encontrado" podría ser falta de permiso).
+    if (!ctx || ctx.perfil || !ctx.tables.perfiles.table || ctx.tables.perfiles.error) return
     try {
       if (localStorage.getItem(intentoKey(user.id))) return
       localStorage.setItem(intentoKey(user.id), '1')

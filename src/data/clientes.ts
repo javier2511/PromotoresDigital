@@ -1,10 +1,17 @@
 import type { PostgrestError, User } from '@supabase/supabase-js'
-import { VALORES_VISITADO } from '../config/schema'
+import { ESTATUS_ASIGNACION_COMPLETADA, ESTATUS_ASIGNACION_OCULTA, VALORES_VISITADO } from '../config/schema'
 import { locationFromColumns, parseLocation, type LatLng } from '../lib/geo'
 import { recentlyFinished } from '../lib/draft'
 import { likeExact, ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
 import { normalize, toBoolean } from '../lib/text'
+
+/** Asignación del cliente al promotor (tabla asignaciones), si existe. */
+export interface Asignacion {
+  id: Id | null
+  estatus: string | null
+  fecha: string | null
+}
 
 export interface Cliente {
   id: Id
@@ -16,6 +23,8 @@ export interface Cliente {
   codigo: string | null
   location: LatLng | null
   visitado: boolean
+  /** Asignación pendiente (o la última completada) cuando los clientes se asignan por la tabla asignaciones. */
+  asignacion: Asignacion | null
   /** Fila completa, para mostrar todas las propiedades que cargaste. */
   raw: Row
 }
@@ -92,6 +101,7 @@ function toCliente(row: Row, ctx: SchemaContext, visitedIds: Set<string> | null)
     codigo: text(c.codigo ? row[c.codigo] : null),
     location,
     visitado,
+    asignacion: null,
     raw: row,
   }
 }
@@ -113,10 +123,84 @@ async function fetchVisitedIds(ctx: SchemaContext, user: User): Promise<Set<stri
   return new Set(rows.map((r) => String(r[clienteCol])))
 }
 
+interface AsignacionesPorCliente {
+  /** Llave del cliente → asignación vigente y si ya está completada. */
+  porCliente: Map<string, { asignacion: Asignacion; completada: boolean }>
+}
+
+const estatusEn = (lista: string[], valor: unknown) => lista.includes(normalize(valor))
+
+/** Asignaciones del usuario agrupadas por cliente (las canceladas no cuentan). */
+async function fetchAsignaciones(ctx: SchemaContext, user: User): Promise<AsignacionesPorCliente> {
+  const a = ctx.tables.asignaciones
+  const c = a.columns
+  const rows = await fetchAll(() => {
+    const q = supabase.from(a.table!).select('*', { count: 'exact' }).order(c.id ?? c.cliente!, { ascending: true })
+    return whereUser(q, c.usuario!, ownerValueFor(c.usuario!, ctx, user))
+  })
+  const grupos = new Map<string, Row[]>()
+  for (const row of rows) {
+    if (c.estatus && estatusEn(ESTATUS_ASIGNACION_OCULTA, row[c.estatus])) continue
+    const key = String(row[c.cliente!])
+    grupos.set(key, [...(grupos.get(key) ?? []), row])
+  }
+  const fecha = (row: Row) => (c.fecha ? String(row[c.fecha] ?? '') : '')
+  const porCliente = new Map<string, { asignacion: Asignacion; completada: boolean }>()
+  for (const [key, lista] of grupos) {
+    const completada = (row: Row) => Boolean(c.estatus && estatusEn(ESTATUS_ASIGNACION_COMPLETADA, row[c.estatus]))
+    const ordenadas = [...lista].sort((x, y) => fecha(x).localeCompare(fecha(y)))
+    // La pendiente más antigua; si todas están completadas, la más reciente.
+    const vigente = ordenadas.find((row) => !completada(row)) ?? ordenadas[ordenadas.length - 1]
+    porCliente.set(key, {
+      asignacion: {
+        id: c.id ? (vigente[c.id] as Id) : null,
+        estatus: c.estatus ? ((vigente[c.estatus] as string | null) ?? null) : null,
+        fecha: c.fecha ? ((vigente[c.fecha] as string | null) ?? null) : null,
+      },
+      completada: completada(vigente),
+    })
+  }
+  return { porCliente }
+}
+
+/** Clientes por su llave, en grupos para no exceder el largo de la URL. */
+async function fetchClientesPorLlave(ctx: SchemaContext, llaves: string[]): Promise<Row[]> {
+  const t = ctx.tables.clientes
+  const grupos: string[][] = []
+  for (let i = 0; i < llaves.length; i += 100) grupos.push(llaves.slice(i, i + 100))
+  const partes = await Promise.all(
+    grupos.map((grupo) =>
+      fetchAll(() =>
+        supabase.from(t.table!).select('*', { count: 'exact' }).in(t.columns.id!, grupo).order(t.columns.id!, { ascending: true }),
+      ),
+    ),
+  )
+  return partes.flat()
+}
+
 export async function fetchClientes(ctx: SchemaContext, user: User): Promise<Cliente[]> {
   const t = ctx.tables.clientes
   if (!t.table) throw new SchemaError('No se encontró la tabla de clientes en Supabase.')
   if (!t.columns.id) throw new SchemaError(`La tabla "${t.table}" no tiene una columna de id reconocible.`)
+  // Visitas finalizadas en este teléfono cuyo "visitado" la base no dejó guardar (no se vuelven a ofrecer).
+  const recientes = recentlyFinished(user.id)
+
+  const a = ctx.tables.asignaciones
+  if (a.table && a.columns.cliente && a.columns.usuario) {
+    // Clientes asignados por la tabla de asignaciones: el estatus dice si ya se visitaron.
+    const { porCliente } = await fetchAsignaciones(ctx, user)
+    const rows = porCliente.size > 0 ? await fetchClientesPorLlave(ctx, [...porCliente.keys()]) : []
+    return rows.map((row) => {
+      const cliente = toCliente(row, ctx, null)
+      const info = porCliente.get(cliente.key)
+      return {
+        ...cliente,
+        asignacion: info?.asignacion ?? null,
+        visitado: Boolean(info?.completada) || recientes.has(cliente.key),
+      }
+    })
+  }
+
   const owner = ctx.owner
   if (owner?.error) {
     // Nunca se muestran clientes sin filtrar: serían los de todos los promotores.
@@ -132,8 +216,6 @@ export async function fetchClientes(ctx: SchemaContext, user: User): Promise<Cli
     }),
     t.columns.visitado ? Promise.resolve(null) : fetchVisitedIds(ctx, user),
   ])
-  // Visitas finalizadas en este teléfono cuyo "visitado" la base no dejó guardar (no se vuelven a ofrecer).
-  const recientes = recentlyFinished(user.id)
   return rows.map((row) => {
     const cliente = toCliente(row, ctx, visitedIds)
     return recientes.has(cliente.key) ? { ...cliente, visitado: true } : cliente
