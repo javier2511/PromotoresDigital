@@ -164,3 +164,26 @@ export function visibleQuestions(questions: Question[], rules: Rule[], answers: 
 
   return new Set(questions.filter((q) => visible.get(q.key) !== false).map((q) => q.key))
 }
+
+const OPERADOR_TEXTO: Record<Operator, string> = {
+  eq: '=',
+  neq: '≠',
+  gt: '>',
+  gte: '≥',
+  lt: '<',
+  lte: '≤',
+  contains: 'contiene',
+  not_contains: 'no contiene',
+  in: 'es uno de',
+  answered: 'está respondida',
+  empty: 'está vacía',
+}
+
+/** "Se muestra «P3 …» si «P1 …» = «Sí»", para revisar las reglas en Verificar conexión. */
+export function describirRegla(rule: Rule, pregunta: (key: string) => string): string {
+  const condicion =
+    rule.operator === 'answered' || rule.operator === 'empty'
+      ? `${pregunta(rule.source)} ${OPERADOR_TEXTO[rule.operator]}`
+      : `${pregunta(rule.source)} ${OPERADOR_TEXTO[rule.operator]} «${rule.value}»`
+  return `${rule.action === 'show' ? 'Se muestra' : 'Se oculta'} ${pregunta(rule.target)} si ${condicion}`
+}

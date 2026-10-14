@@ -1,6 +1,7 @@
 import { ChartColumn, CircleUserRound, Map as MapIcon, Store, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet, ScrollRestoration, useMatches } from 'react-router'
 import { useClientes } from '../data/hooks'
+import { useAsegurarPerfil } from '../data/perfil'
 import { useAuth } from '../providers/AuthProvider'
 import { Logo } from './Logo'
 import { cn } from './ui/cn'
@@ -46,6 +47,7 @@ function SidebarProgress() {
 export function AppShell() {
   const handle = useRouteHandle()
   const { user } = useAuth()
+  useAsegurarPerfil()
 
   return (
     <div className="min-h-dvh">

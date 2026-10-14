@@ -1,4 +1,4 @@
-import { ArrowLeft, ChartColumn, Eye, EyeOff, Lock, Mail, MailCheck, MapPinned, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ChartColumn, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, MapPinned, ShieldCheck, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 import { LogoMark } from '../components/Logo'
@@ -12,7 +12,7 @@ import { useAuth } from '../providers/AuthProvider'
 
 const FEATURES = [
   { icon: MapPinned, title: 'Tus clientes en el mapa', text: 'Con tu ubicación en tiempo real y los más cercanos primero.' },
-  { icon: ShieldCheck, title: 'Visitas verificadas', text: 'El formulario se desbloquea al llegar al punto de venta.' },
+  { icon: ShieldCheck, title: 'Visitas verificadas', text: 'Cada visita registra dónde se hizo y a qué distancia del cliente.' },
   { icon: ChartColumn, title: 'Tu avance al día', text: 'Cuántos clientes llevas y tus resultados.' },
 ]
 
@@ -22,15 +22,25 @@ export function LoginPage() {
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
-  const [mode, setMode] = useState<'login' | 'recover'>('login')
+  const [mode, setMode] = useState<'login' | 'registro'>('login')
+  const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmacion, setConfirmacion] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sent, setSent] = useState(false)
+  const [pendienteConfirmar, setPendienteConfirmar] = useState(false)
 
   if (!authLoading && user) return <Navigate to={from} replace />
+
+  const cambiarModo = (nuevo: 'login' | 'registro') => {
+    setMode(nuevo)
+    setError(null)
+    setPendienteConfirmar(false)
+    setPassword('')
+    setConfirmacion('')
+  }
 
   const onLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -42,17 +52,57 @@ export function LoginPage() {
     else navigate(from, { replace: true })
   }
 
-  const onRecover = async (e: FormEvent) => {
+  const onRegistro = async (e: FormEvent) => {
     e.preventDefault()
+    if (!nombre.trim()) return setError('Escribe tu nombre.')
+    if (password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
+    if (password !== confirmacion) return setError('Las contraseñas no coinciden.')
     setError(null)
     setLoading(true)
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/restablecer`,
+    const { data, error: err } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        // registro_app: la app crea su fila en la tabla de usuarios al entrar por primera vez.
+        data: { full_name: nombre.trim(), registro_app: true },
+        emailRedirectTo: window.location.origin,
+      },
     })
     setLoading(false)
-    if (err) setError(friendlyError(err))
-    else setSent(true)
+    if (err) return setError(friendlyError(err))
+    if (data.session) return navigate('/', { replace: true })
+    // Con "Confirm email" activo, Supabase no inicia sesión hasta confirmar. Si el correo ya existía,
+    // responde sin identidades.
+    if (data.user && data.user.identities?.length === 0) {
+      return setError('Ya existe una cuenta con ese correo. Inicia sesión.')
+    }
+    setPendienteConfirmar(true)
   }
+
+  const campoCorreo = (
+    <TextField
+      label="Correo electrónico"
+      type="email"
+      inputMode="email"
+      autoComplete="email"
+      autoCapitalize="none"
+      placeholder="nombre@empresa.com"
+      icon={<Mail />}
+      value={email}
+      onChange={(e) => setEmail(e.target.value)}
+      required
+    />
+  )
+  const verContrasena = (
+    <button
+      type="button"
+      onClick={() => setShowPassword((v) => !v)}
+      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+      className="grid size-9 place-items-center rounded-lg text-muted hover:bg-soft hover:text-fg"
+    >
+      {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+    </button>
+  )
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[1.05fr_1fr]">
@@ -94,20 +144,9 @@ export function LoginPage() {
             <form onSubmit={onLogin} className="space-y-5" noValidate>
               <div>
                 <h2 className="text-2xl font-bold tracking-tight">Inicia sesión</h2>
-                <p className="mt-1 text-sm text-muted">Usa el correo y la contraseña que te dio tu administrador.</p>
+                <p className="mt-1 text-sm text-muted">Entra con tu correo y contraseña.</p>
               </div>
-              <TextField
-                label="Correo electrónico"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoCapitalize="none"
-                placeholder="nombre@empresa.com"
-                icon={<Mail />}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              {campoCorreo}
               <TextField
                 label="Contraseña"
                 type={showPassword ? 'text' : 'password'}
@@ -117,79 +156,91 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                trailing={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                    className="grid size-9 place-items-center rounded-lg text-muted hover:bg-soft hover:text-fg"
-                  >
-                    {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
-                  </button>
-                }
+                trailing={verContrasena}
               />
               {error && <Alert>{error}</Alert>}
               <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email || !password}>
                 Ingresar
               </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('recover')
-                  setError(null)
-                  setSent(false)
-                }}
-                className="mx-auto block text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300"
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
+              <p className="text-center text-sm text-muted">
+                ¿No tienes cuenta?{' '}
+                <button
+                  type="button"
+                  onClick={() => cambiarModo('registro')}
+                  className="font-semibold text-brand-600 hover:underline dark:text-brand-300"
+                >
+                  Crear cuenta
+                </button>
+              </p>
             </form>
+          ) : pendienteConfirmar ? (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <div className="grid size-14 animate-pop place-items-center rounded-2xl bg-emerald-500/12 text-emerald-600">
+                <MailCheck className="size-7" />
+              </div>
+              <p className="text-lg font-semibold">Confirma tu correo</p>
+              <p className="text-sm text-muted">
+                Te enviamos un enlace a <strong className="text-fg">{email}</strong>. Ábrelo para activar tu cuenta y
+                después inicia sesión.
+              </p>
+              <Button variant="secondary" className="mt-2" onClick={() => cambiarModo('login')}>
+                Ir a iniciar sesión
+              </Button>
+            </div>
           ) : (
-            <form onSubmit={onRecover} className="space-y-5" noValidate>
+            <form onSubmit={onRegistro} className="space-y-4" noValidate>
               <button
                 type="button"
-                onClick={() => {
-                  setMode('login')
-                  setError(null)
-                }}
+                onClick={() => cambiarModo('login')}
                 className="-ml-1 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-fg"
               >
                 <ArrowLeft className="size-4" /> Volver
               </button>
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">Recupera tu acceso</h2>
-                <p className="mt-1 text-sm text-muted">Te enviaremos un enlace para crear una contraseña nueva.</p>
+                <h2 className="text-2xl font-bold tracking-tight">Crea tu cuenta</h2>
+                <p className="mt-1 text-sm text-muted">Tu administrador te asignará clientes después de registrarte.</p>
               </div>
-              {sent ? (
-                <div className="flex flex-col items-center gap-3 py-4 text-center">
-                  <div className="grid size-14 animate-pop place-items-center rounded-2xl bg-emerald-500/12 text-emerald-600">
-                    <MailCheck className="size-7" />
-                  </div>
-                  <p className="font-semibold">Revisa tu correo</p>
-                  <p className="text-sm text-muted">
-                    Si <strong className="text-fg">{email}</strong> tiene una cuenta, recibirás el enlace en unos minutos.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <TextField
-                    label="Correo electrónico"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    autoCapitalize="none"
-                    placeholder="nombre@empresa.com"
-                    icon={<Mail />}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                  {error && <Alert>{error}</Alert>}
-                  <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email}>
-                    Enviar enlace
-                  </Button>
-                </>
-              )}
+              <TextField
+                label="Nombre completo"
+                autoComplete="name"
+                placeholder="Nombre y apellido"
+                icon={<User />}
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                required
+              />
+              {campoCorreo}
+              <TextField
+                label="Contraseña"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Mínimo 6 caracteres"
+                icon={<Lock />}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                trailing={verContrasena}
+              />
+              <TextField
+                label="Confirma la contraseña"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Repite la contraseña"
+                icon={<KeyRound />}
+                value={confirmacion}
+                onChange={(e) => setConfirmacion(e.target.value)}
+                required
+              />
+              {error && <Alert>{error}</Alert>}
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                loading={loading}
+                disabled={!nombre || !email || !password || !confirmacion}
+              >
+                Crear cuenta
+              </Button>
             </form>
           )}
         </div>

@@ -225,7 +225,9 @@ export const schema: Schema = {
       // Opcional: mostrar / ocultar (si no existe se usa "mostrar").
       accion: ['accion', 'action', 'tipo_regla', 'efecto', 'mostrar'],
     },
-    required: ['pregunta', 'dependeDe'],
+    // Si los nombres no coinciden, al leer las reglas se deducen por las palabras de cada columna
+    // (destino, siguiente, mostrar… / padre, origen, condición, depende…).
+    required: [],
   },
 
   /** Registro de cada visita finalizada. */

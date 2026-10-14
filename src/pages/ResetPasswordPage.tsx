@@ -70,8 +70,7 @@ export function ResetPasswordPage() {
           <div className="mt-6 space-y-4">
             <h1 className="text-2xl font-bold tracking-tight">Enlace no válido</h1>
             <p className="text-sm text-muted">
-              El enlace para restablecer la contraseña expiró o ya se usó. Solicita uno nuevo desde la pantalla de inicio de
-              sesión.
+              El enlace para restablecer la contraseña expiró o ya se usó. Pide a tu administrador que te envíe uno nuevo.
             </p>
             <ButtonLink to="/login" size="lg" className="w-full">
               Ir a iniciar sesión

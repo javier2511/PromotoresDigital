@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, CircleCheck, ClipboardList, MapPin, Navigation, Save, SearchX, Trash2 } from 'lucide-react'
+import { Check, CircleAlert, CircleCheck, ClipboardCopy, ClipboardList, MapPin, Navigation, RotateCw, Save, SearchX, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
@@ -10,7 +10,7 @@ import { StartVisitButton, useVisitGate, VisitGateCard } from '../components/Vis
 import { Button, ButtonLink } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
-import { ConfirmDialog } from '../components/ui/Dialog'
+import { ConfirmDialog, Dialog } from '../components/ui/Dialog'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
 import { RADIO_VISITA_M } from '../config/app'
@@ -18,7 +18,7 @@ import type { Cliente } from '../data/clientes'
 import { queryKeys, useClientes, useFormulario } from '../data/hooks'
 import { borrarVisita, finalizarVisita } from '../data/visitas'
 import { clearDraft, loadDraft, rememberFinished, saveDraft, type VisitDraft } from '../lib/draft'
-import { friendlyError, isNetworkError } from '../lib/errors'
+import { detalleDeError, friendlyError, guardarUltimoError, isNetworkError, textoDetalle, type DetalleError } from '../lib/errors'
 import { formatDistance } from '../lib/geo'
 import { isAnswered, type AnswerValue } from '../lib/questions'
 import { visibleQuestions } from '../lib/rules'
@@ -84,6 +84,7 @@ export function VisitaPage() {
   const [now, setNow] = useState(() => Date.now())
   const finished = useRef(false)
   const [discarding, setDiscarding] = useState(false)
+  const [errorGuardado, setErrorGuardado] = useState<DetalleError | null>(null)
 
 
   // Autoguardado del borrador en el teléfono.
@@ -134,12 +135,15 @@ export function VisitaPage() {
       navigate(`/clientes/${encodeURIComponent(id)}/visita/finalizada`, { replace: true, state })
     },
     onError: (err) => {
-      toast.error(
-        isNetworkError(err)
-          ? 'Sin conexión. Tus respuestas siguen guardadas en este teléfono; inténtalo de nuevo cuando tengas señal.'
-          : `No se pudo guardar la visita: ${friendlyError(err)}`,
-        { duration: 8000 },
-      )
+      if (isNetworkError(err)) {
+        toast.error('Sin conexión. Tus respuestas siguen guardadas en este teléfono; inténtalo de nuevo cuando tengas señal.', {
+          duration: 8000,
+        })
+        return
+      }
+      const detalle = detalleDeError(err)
+      guardarUltimoError(detalle)
+      setErrorGuardado(detalle)
     },
   })
 
@@ -329,6 +333,56 @@ export function VisitaPage() {
         Se guardarán {respondidas} respuesta{respondidas === 1 ? '' : 's'} de <strong className="text-fg">{cliente.nombre}</strong>{' '}
         y el cliente se marcará como visitado. Después ya no podrás editarlas.
       </ConfirmDialog>
+
+      <Dialog open={errorGuardado !== null} onClose={() => setErrorGuardado(null)} labelledBy="error-guardar">
+        {errorGuardado && (
+          <>
+            <div className="flex items-start gap-3">
+              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-red-500/12 text-red-600">
+                <CircleAlert className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="error-guardar" className="text-lg font-semibold">
+                  No se pudo guardar la visita
+                </h2>
+                <p className="mt-1 text-sm text-muted">{friendlyError({ message: errorGuardado.mensaje, code: errorGuardado.codigo })}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-muted">Tus respuestas siguen guardadas en este teléfono.</p>
+            <details className="mt-3 rounded-xl bg-soft px-3 py-2 text-sm">
+              <summary className="cursor-pointer font-medium">Detalle técnico</summary>
+              <pre className="mt-2 max-h-48 overflow-auto font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap text-muted">
+                {textoDetalle(errorGuardado)}
+              </pre>
+            </details>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                variant="secondary"
+                icon={<ClipboardCopy className="size-4" />}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(textoDetalle(errorGuardado))
+                    toast.success('Detalle copiado')
+                  } catch {
+                    toast.error('No se pudo copiar')
+                  }
+                }}
+              >
+                Copiar detalle
+              </Button>
+              <Button
+                onClick={() => {
+                  setErrorGuardado(null)
+                  mutation.mutate()
+                }}
+                icon={<RotateCw className="size-4" />}
+              >
+                Reintentar
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
 
       <ConfirmDialog
         open={discardOpen}

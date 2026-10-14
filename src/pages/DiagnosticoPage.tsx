@@ -10,8 +10,11 @@ import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { Skeleton } from '../components/ui/Skeleton'
 import { schema, type Schema } from '../config/schema'
+import type { Formulario } from '../data/formulario'
 import { queryKeys, useClientes, useFormulario, useSchema } from '../data/hooks'
 import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
+import { leerUltimoError } from '../lib/errors'
+import { describirRegla } from '../lib/rules'
 import { clearSchemaCache, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
 import { useUser } from '../providers/AuthProvider'
 
@@ -141,6 +144,76 @@ function TableCard({ k, t }: { k: keyof Schema; t: ResolvedTable }) {
   )
 }
 
+/** Cómo entiende la app la tabla de reglas: columnas, cuántas reglas aplica y en qué términos. */
+function ReglasCard({ formulario }: { formulario: Formulario }) {
+  const { diagnostico: d, rules, questions } = formulario
+  const numero = new Map(questions.map((q, i) => [q.key, i + 1]))
+  const nombre = (key: string) => {
+    const q = questions.find((x) => x.key === key)
+    const texto = q ? (q.text.length > 48 ? `${q.text.slice(0, 48)}…` : q.text) : key
+    return `P${numero.get(key) ?? '?'} «${texto}»`
+  }
+  const ok = d.tabla !== null && (d.leidas === 0 || d.aplicadas > 0)
+  const columnas: [string, string | undefined][] = [
+    ['Pregunta que se muestra', d.columnas.pregunta],
+    ['Depende de la pregunta', d.columnas.dependeDe],
+    ['Valor esperado', d.columnas.valor],
+    ['Operador', d.columnas.operador],
+    ['Acción', d.columnas.accion],
+  ]
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center gap-3 border-b border-line p-4">
+        <div className={cn('grid size-9 place-items-center rounded-xl', ok ? 'bg-emerald-500/12 text-emerald-600' : 'bg-amber-500/15 text-amber-600')}>
+          {ok ? <CircleCheck className="size-5" /> : <TriangleAlert className="size-5" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Reglas de las preguntas</p>
+          <p className="text-sm text-muted">
+            {d.tabla
+              ? `${d.leidas} reglas leídas de "${d.tabla}" · ${d.aplicadas} se aplican a ${questions.length} preguntas`
+              : 'No se encontró la tabla de reglas: se muestran todas las preguntas.'}
+          </p>
+        </div>
+      </div>
+      {d.tabla && (
+        <dl className="divide-y divide-line text-sm">
+          {columnas.map(([label, col]) => (
+            <div key={label} className="flex items-center justify-between gap-3 px-4 py-2">
+              <dt className="text-muted">{label}</dt>
+              <dd>
+                {col ? <code className="rounded bg-soft px-1.5 py-0.5 font-mono text-[13px]">{col}</code> : <span className="text-muted">—</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {d.descartadas.length > 0 && (
+        <div className="border-t border-line bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <p className="font-semibold">Reglas que no se pudieron usar</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {d.descartadas.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {rules.length > 0 && (
+        <details className="border-t border-line px-4 py-2.5 text-sm" open={rules.length <= 8}>
+          <summary className="cursor-pointer text-muted">Cómo se interpretan ({rules.length})</summary>
+          <ul className="mt-2 space-y-1.5">
+            {rules.slice(0, 30).map((r, i) => (
+              <li key={i} className="rounded-lg bg-soft px-2.5 py-1.5 text-[13px]">
+                {describirRegla(r, nombre)}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </Card>
+  )
+}
+
 /** Qué columna se usa para cada dato de la ficha del cliente (INFO_CLIENTE). */
 function InfoClienteCard({ columnas, internas }: { columnas: string[] | null; internas: string[] }) {
   if (!columnas) return null
@@ -218,6 +291,8 @@ export function DiagnosticoPage() {
         preguntas: formulario?.questions.length ?? null,
         reglas: formulario?.rules.length ?? null,
       },
+      reglas: formulario?.diagnostico ?? null,
+      ultimoErrorAlGuardar: leerUltimoError(),
     }
     try {
       await navigator.clipboard.writeText(JSON.stringify(reporte, null, 2))
@@ -281,6 +356,7 @@ export function DiagnosticoPage() {
                 <strong className="text-fg">{formulario?.rules.length ?? '…'}</strong>
               </p>
             </Card>
+            {formulario && <ReglasCard formulario={formulario} />}
             <InfoClienteCard
               columnas={ctx.tables.clientes.allColumns ?? (clientes?.[0] ? Object.keys(clientes[0].raw) : null)}
               internas={columnasInternas(ctx)}

@@ -17,6 +17,15 @@ export function friendlyError(error: unknown): string {
   const msg = e.message ?? String(error)
   if (isNetworkError(e)) return 'Sin conexión a internet. Revisa tu señal e inténtalo de nuevo.'
   if (/invalid login credentials/i.test(msg)) return 'Correo o contraseña incorrectos.'
+  if (/user already registered|already been registered/i.test(msg)) return 'Ya existe una cuenta con ese correo. Inicia sesión.'
+  if (/signups? not allowed|signup.*disabled/i.test(msg)) {
+    return 'El registro de usuarios está desactivado en Supabase (Authentication → Sign In / Providers → "Allow new users to sign up").'
+  }
+  if (/email rate limit/i.test(msg)) {
+    return 'Supabase no pudo enviar más correos por ahora (límite de envío). Espera un rato o desactiva "Confirm email" en Supabase.'
+  }
+  if (/for security purposes/i.test(msg)) return 'Espera unos segundos e inténtalo de nuevo.'
+  if (/invalid format|unable to validate email/i.test(msg)) return 'El correo no es válido.'
   if (/email not confirmed/i.test(msg)) return 'Tu correo aún no está confirmado. Revisa tu bandeja de entrada.'
   if (e.status === 429 || /rate limit|too many requests/i.test(msg)) {
     return 'Demasiados intentos. Espera un momento e inténtalo de nuevo.'
@@ -30,4 +39,64 @@ export function friendlyError(error: unknown): string {
     return 'La nueva contraseña debe ser distinta de la anterior.'
   }
   return msg
+}
+
+/** Detalle técnico de un error al guardar, para mostrarlo y poder copiarlo. */
+export interface DetalleError {
+  fecha: string
+  paso?: string
+  tabla?: string
+  codigo?: string
+  mensaje: string
+  detalle?: string
+  pista?: string
+  columnas?: string[]
+}
+
+export function detalleDeError(error: unknown): DetalleError {
+  const e = (error ?? {}) as Record<string, unknown>
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined)
+  return {
+    fecha: new Date().toISOString(),
+    paso: texto(e.paso),
+    tabla: texto(e.tabla),
+    codigo: texto(e.code),
+    mensaje: texto(e.message) ?? String(error),
+    detalle: texto(e.details),
+    pista: texto(e.hint),
+    columnas: Array.isArray(e.columnas) ? (e.columnas as string[]) : undefined,
+  }
+}
+
+export function textoDetalle(d: DetalleError): string {
+  return [
+    d.paso && `Paso: ${d.paso}`,
+    d.tabla && `Tabla: ${d.tabla}`,
+    d.codigo && `Código: ${d.codigo}`,
+    `Mensaje: ${d.mensaje}`,
+    d.detalle && `Detalle: ${d.detalle}`,
+    d.pista && `Pista: ${d.pista}`,
+    d.columnas?.length && `Columnas enviadas: ${d.columnas.join(', ')}`,
+    `Fecha: ${d.fecha}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+const ULTIMO_ERROR = 'pd.ultimoError'
+
+export function guardarUltimoError(detalle: DetalleError) {
+  try {
+    localStorage.setItem(ULTIMO_ERROR, JSON.stringify(detalle))
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+export function leerUltimoError(): DetalleError | null {
+  try {
+    return JSON.parse(localStorage.getItem(ULTIMO_ERROR) ?? 'null') as DetalleError | null
+  } catch {
+    return null
+  }
 }

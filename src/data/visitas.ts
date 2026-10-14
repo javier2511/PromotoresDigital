@@ -1,10 +1,16 @@
-import type { PostgrestError, User } from '@supabase/supabase-js'
+import type { User } from '@supabase/supabase-js'
 import { VALOR_ESTADO_VISITA, VALOR_VISITADO_TEXTO } from '../config/schema'
-import { isNetworkError } from '../lib/errors'
 import { serializeAnswer, isAnswered, type Answers, type Question } from '../lib/questions'
-import { isMissingColumnError, ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
+import { ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
 import { visitadoValue, type Cliente } from './clientes'
+import {
+  ErrorAlGuardar,
+  insertarConRecuperacion,
+  palabras,
+  valorFecha,
+  type Recuperacion,
+} from './insercion'
 
 export interface PosicionVisita {
   lat: number
@@ -37,86 +43,55 @@ export interface FinalizarVisitaResult {
   warning: string | null
 }
 
-/** Fecha y hora local con zona horaria (sirve para columnas timestamp, date y time). */
-export function localIso(date: Date): string {
-  const pad = (n: number) => String(Math.floor(Math.abs(n))).padStart(2, '0')
-  const offset = -date.getTimezoneOffset()
-  const sign = offset >= 0 ? '+' : '-'
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
-    `${sign}${pad(offset / 60)}:${pad(offset % 60)}`
-  )
-}
-
 function put(row: Row, column: string | undefined, value: unknown) {
   if (column && value !== undefined && value !== null) row[column] = value
 }
 
-function omit(row: Row, column: string): Row {
-  const out: Row = { ...row }
-  delete out[column]
-  return out
-}
-
-/** Errores porque un dato no encaja en su columna (tipo, enum, check, columna inexistente): se puede reintentar sin ella. */
-export function isDataShapeError(error: Pick<PostgrestError, 'code' | 'message'>): boolean {
-  if (isNetworkError(error) || error.code === '42501') return false
-  return isMissingColumnError(error) || /^22/.test(error.code ?? '') || error.code === '23514'
+/** Formas de identificar al usuario en una columna: la más probable primero. */
+function valoresUsuario(columna: string, input: FinalizarVisitaInput): (string | number)[] {
+  const { ctx, user } = input
+  const valores = [ownerValueFor(columna, ctx, user), user.id, user.email, ctx.perfil?.id]
+  return [...new Set(valores.filter((v): v is string | number => v !== undefined && v !== null && v !== ''))]
 }
 
 /**
- * Qué columna quitar para reintentar: la que nombra el error (columna inexistente, restricción
- * "visitas_estado_check"…) o, si no la nombra, la opcional menos importante que quede.
- * Nunca quita las esenciales.
+ * Valor para una columna obligatoria que la app no conocía, deducido de su nombre
+ * (p. ej. "fecha_registro", "hora", "id_cliente", "lat"…). undefined si no se sabe.
  */
-export function columnToDrop(
-  error: Pick<PostgrestError, 'message' | 'details' | 'hint'>,
-  present: string[],
-  dropOrder: (string | undefined)[],
-  essential: (string | undefined)[],
-): string | null {
-  const keep = new Set(essential.filter(Boolean))
-  const candidates = present.filter((c) => !keep.has(c))
-  const text = `${error.message ?? ''} ${error.details ?? ''} ${error.hint ?? ''}`.toLowerCase()
-  const named = candidates
-    .filter((c) => new RegExp(`(^|[^a-z0-9])${c.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(text))
-    .sort((a, b) => b.length - a.length)[0]
-  if (named) return named
-  return dropOrder.find((c): c is string => Boolean(c && candidates.includes(c))) ?? null
-}
-
-type InsertResult<T> = { data: T | null; error: PostgrestError | null }
-
-/** Inserta y, si una columna opcional rechaza su valor, reintenta sin esa columna (una a la vez). */
-async function insertAdaptive<T>(
-  rows: Row[],
-  essential: (string | undefined)[],
-  dropOrder: (string | undefined)[],
-  run: (rows: Row[]) => Promise<InsertResult<T>>,
-): Promise<InsertResult<T>> {
-  let current = rows
-  for (let attempt = 0; ; attempt++) {
-    const result = await run(current)
-    if (!result.error || !isDataShapeError(result.error) || attempt >= 8) return result
-    const drop = columnToDrop(result.error, Object.keys(current[0] ?? {}), dropOrder, essential)
-    if (!drop) return result
-    current = current.map((row) => omit(row, drop))
+function valorDeducido(columna: string, input: FinalizarVisitaInput, visitaId: Id | null = null): unknown {
+  const p = palabras(columna)
+  const tiene = (...w: string[]) => w.some((x) => p.includes(x))
+  const { cliente, position, startedAt } = input
+  if (tiene('visita') && visitaId !== null) return visitaId
+  if (tiene('cliente', 'tienda', 'pdv')) return cliente.id
+  if (tiene('usuario', 'user', 'promotor', 'uid', 'vendedor', 'empleado')) return valoresUsuario(columna, input)[0]
+  if (tiene('lat', 'latitud', 'latitude')) return position?.lat
+  if (tiene('lng', 'lon', 'long', 'longitud', 'longitude')) return position?.lng
+  if (tiene('distancia', 'metros', 'distance')) return position?.distance != null ? Math.round(position.distance) : undefined
+  if (tiene('precision', 'accuracy', 'exactitud')) return position ? Math.round(position.accuracy) : undefined
+  if (tiene('ubicacion', 'coordenadas', 'latlng')) return position ? `${position.lat},${position.lng}` : undefined
+  if (tiene('estado', 'status', 'estatus')) return VALOR_ESTADO_VISITA
+  if (tiene('duracion', 'minutos')) return Math.max(1, Math.round((Date.now() - startedAt) / 60000))
+  if (tiene('inicio', 'entrada', 'checkin')) return valorFecha(columna, new Date(startedAt))
+  if (tiene('fecha', 'date', 'dia', 'hora', 'time', 'created', 'registro', 'fin', 'timestamp')) {
+    return valorFecha(columna, new Date())
   }
+  return undefined
 }
 
 async function insertVisita(input: FinalizarVisitaInput): Promise<Id | null> {
-  const { ctx, user, cliente, startedAt, position } = input
+  const { ctx, cliente, startedAt, position } = input
   const v = ctx.tables.visitas
   const c = v.columns
   if (!v.table || !c.cliente) return null
 
-  const now = new Date()
+  const inicio = new Date(startedAt)
+  const fin = new Date()
   const row: Row = {}
   put(row, c.cliente, cliente.id)
-  if (c.usuario) put(row, c.usuario, ownerValueFor(c.usuario, ctx, user))
-  put(row, c.inicio, localIso(new Date(startedAt)))
-  put(row, c.fin, localIso(now))
+  if (c.usuario) put(row, c.usuario, valoresUsuario(c.usuario, input)[0])
+  if (c.inicio) put(row, c.inicio, valorFecha(c.inicio, inicio))
+  if (c.fin) put(row, c.fin, valorFecha(c.fin, fin))
   if (position) {
     put(row, c.latitud, position.lat)
     put(row, c.longitud, position.lng)
@@ -125,46 +100,50 @@ async function insertVisita(input: FinalizarVisitaInput): Promise<Id | null> {
     put(row, c.precision, Math.round(position.accuracy))
   }
   put(row, c.estado, VALOR_ESTADO_VISITA)
-  put(row, c.duracion, Math.max(1, Math.round((now.getTime() - startedAt) / 60000)))
+  put(row, c.duracion, Math.max(1, Math.round((fin.getTime() - startedAt) / 60000)))
+
+  const fechas: Record<string, Date> = {}
+  if (c.inicio) fechas[c.inicio] = inicio
+  if (c.fin) fechas[c.fin] = fin
+  const recuperacion: Recuperacion = {
+    esenciales: [c.cliente],
+    // Primero se sacrifica lo menos importante; la ubicación (evidencia de la visita) al final.
+    quitarPrimero: [c.estado, c.duracion, c.precision, c.inicio, c.ubicacion, c.fin, c.distancia, c.latitud, c.longitud, c.usuario],
+    rellenar: (columna) => valorDeducido(columna, input),
+    usuario: c.usuario ? { columna: c.usuario, alternativas: valoresUsuario(c.usuario, input) } : undefined,
+    fechas,
+  }
 
   // Las respuestas se ligan a la visita por su id: en ese caso hay que obtenerlo de vuelta.
   const needsId = Boolean(ctx.tables.respuestas.table && ctx.tables.respuestas.columns.visita)
   const returning = c.id ?? '*'
-  const { data, error } = await insertAdaptive<Row>(
-    [row],
-    [c.cliente, c.usuario],
-    // Primero se sacrifica lo menos importante; la ubicación (evidencia de la visita) al final.
-    [c.estado, c.duracion, c.precision, c.inicio, c.ubicacion, c.fin, c.distancia, c.latitud, c.longitud],
-    async ([values]) => {
-      const result = await supabase.from(v.table!).insert(values).select(returning).single()
-      if (result.error?.code !== '42501' || needsId) {
-        return { data: result.data as Row | null, error: result.error }
-      }
-      // Permiso para insertar pero no para leer la fila creada, y no se necesita su id.
-      const plain = await supabase.from(v.table!).insert(values)
-      return { data: null, error: plain.error }
-    },
-  )
-  if (error?.code === '42501' && needsId) {
-    throw new Error(
-      'No se pudo registrar la visita: la base de datos no permite leer la visita recién creada (falta una política RLS de lectura en la tabla de visitas).',
-    )
-  }
-  if (error) throw error
+  const { data, error, filas } = await insertarConRecuperacion<Row>([row], recuperacion, async ([values]) => {
+    const result = await supabase.from(v.table!).insert(values).select(returning).single()
+    if (result.error?.code !== '42501' || needsId) return { data: result.data as Row | null, error: result.error }
+    // Permiso para insertar pero no para leer la fila creada, y no se necesita su id.
+    const plain = await supabase.from(v.table!).insert(values)
+    return { data: null, error: plain.error }
+  })
+  if (error) throw new ErrorAlGuardar('Registrar la visita', v.table, error, Object.keys(filas[0] ?? {}))
   return c.id && data ? (data[c.id] as Id) : null
 }
 
 async function insertRespuestas(input: FinalizarVisitaInput, visitaId: Id | null): Promise<number> {
-  const { ctx, user, cliente, questions, visible, answers } = input
+  const { ctx, cliente, questions, visible, answers } = input
   const r = ctx.tables.respuestas
   const c = r.columns
   if (!r.table || !c.pregunta || !c.respuesta) return 0
   if (c.visita && visitaId === null && ctx.tables.visitas.table) {
     // Sin el id las respuestas quedarían sueltas, sin visita.
-    throw new Error('No se pudo obtener el id de la visita para ligar las respuestas.')
+    throw new ErrorAlGuardar(
+      'Guardar las respuestas',
+      r.table,
+      { code: '', message: 'No se obtuvo el id de la visita para ligar las respuestas (revisa la columna id de la tabla de visitas).' },
+      [],
+    )
   }
 
-  const fecha = localIso(new Date())
+  const ahora = new Date()
   const rows: Row[] = questions
     .filter((q) => visible.has(q.key) && isAnswered(answers[q.key]))
     .map((q) => {
@@ -174,23 +153,28 @@ async function insertRespuestas(input: FinalizarVisitaInput, visitaId: Id | null
       put(row, c.preguntaTexto, q.text)
       if (visitaId !== null) put(row, c.visita, visitaId)
       put(row, c.cliente, cliente.id)
-      if (c.usuario) put(row, c.usuario, ownerValueFor(c.usuario, ctx, user))
-      put(row, c.fecha, fecha)
+      if (c.usuario) put(row, c.usuario, valoresUsuario(c.usuario, input)[0])
+      if (c.fecha) put(row, c.fecha, valorFecha(c.fecha, ahora))
       return row
     })
   if (rows.length === 0) return 0
 
   const linked = visitaId !== null && c.visita ? c.visita : c.cliente
-  const { error } = await insertAdaptive<null>(
+  const { error, filas } = await insertarConRecuperacion<null>(
     rows,
-    [c.pregunta, c.respuesta, linked],
-    [c.fecha, c.preguntaTexto, c.usuario, c.cliente],
+    {
+      esenciales: [c.pregunta, c.respuesta, linked],
+      quitarPrimero: [c.fecha, c.preguntaTexto, c.usuario, c.cliente],
+      rellenar: (columna) => valorDeducido(columna, input, visitaId),
+      usuario: c.usuario ? { columna: c.usuario, alternativas: valoresUsuario(c.usuario, input) } : undefined,
+      fechas: c.fecha ? { [c.fecha]: ahora } : {},
+    },
     async (values) => {
       const result = await supabase.from(r.table!).insert(values)
       return { data: null, error: result.error }
     },
   )
-  if (error) throw error
+  if (error) throw new ErrorAlGuardar('Guardar las respuestas', r.table, error, Object.keys(filas[0] ?? {}))
   return rows.length
 }
 

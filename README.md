@@ -10,7 +10,7 @@ Reemplaza la versión de FlutterFlow **usando la misma base de datos de Supabase
 
 | Pantalla | Detalle |
 | --- | --- |
-| **Inicio de sesión** | Correo y contraseña de Supabase Auth, con recuperación de contraseña por correo. |
+| **Inicio de sesión** | Correo y contraseña de Supabase Auth. **Crear cuenta** desde la misma pantalla (nombre, correo y contraseña); la cuenta nueva aparece en tu tabla de usuarios y tú le asignas clientes. |
 | **Clientes** | Avance (visitados / asignados), búsqueda, filtros Pendientes · Visitados · Todos, orden por cercanía, distancia a cada cliente y "más cercano" destacado. Al finalizar una visita el cliente sale de Pendientes. |
 | **Mapa** | Pines por estado (rojo pendiente, verde visitado), agrupación cuando hay muchos, punto azul con círculo de precisión y orientación, botón "Mi ubicación", tarjeta del cliente con *Ver detalle* y *Cómo llegar*. En computadora, lista lateral + mapa. |
 | **Ficha del cliente** | Mini mapa con la distancia, botones a Google Maps, Waze y llamada, y la información que tenías en FlutterFlow: saldo de puntos, status autogestión, Premia, cuponera, canal y canjes / promos / lotería / retos de los últimos 3 meses. |
@@ -41,8 +41,8 @@ FlutterFlow. Por eso cabe en los planes gratuitos.
    | `VITE_RADIO_VISITA_M` | *(opcional)* metros para considerar que el promotor está en el punto de venta (si está más lejos se le avisa), p. ej. `100` |
 
 5. **Deploy**. Tendrás una dirección tipo `https://promotores-digital.vercel.app`.
-6. En Supabase → **Authentication → URL Configuration** pon esa dirección en *Site URL* y agrega
-   `https://TU-DOMINIO/restablecer` en *Redirect URLs* (lo usa "¿Olvidaste tu contraseña?").
+6. En Supabase → **Authentication → URL Configuration** pon esa dirección en *Site URL* (los correos de
+   confirmación de cuenta llevan ahí).
 
 Cada vez que hagas *push* a GitHub, Vercel publica la nueva versión sola.
 
@@ -59,6 +59,24 @@ Cada vez que hagas *push* a GitHub, Vercel publica la nueva versión sola.
 4. Igual que en Vercel, agrega la dirección `https://….pages.dev` en Supabase → *URL Configuration*.
 
 El archivo `public/_redirects` ya está listo para Cloudflare Pages (y Netlify); `vercel.json` para Vercel.
+
+### Registro de promotores ("Crear cuenta")
+
+En Supabase → **Authentication → Sign In / Providers**:
+
+- **Allow new users to sign up** debe estar activado (si no, la app avisa que el registro de usuarios está
+  desactivado).
+- **Confirm email**: si está activado, el promotor recibe un correo y debe abrir el enlace antes de poder
+  entrar. El correo que manda Supabase sin configurar SMTP propio tiene un límite de pocos correos por hora,
+  así que para un equipo de promotores conviene **desactivarlo** (entran en cuanto crean su cuenta) o
+  configurar tu propio SMTP en *Authentication → Emails*.
+
+Al entrar por primera vez, la app agrega al promotor en tu tabla de usuarios (`usuarios`/`perfiles`…) con su
+id, correo y nombre, como hacía el registro de FlutterFlow (si tus políticas RLS lo permiten). Después tú le
+asignas clientes desde Supabase. La opción "¿Olvidaste tu contraseña?" se quitó; si alguien la olvida,
+envíale el correo de recuperación desde *Authentication → Users → Send password recovery* (la app tiene la
+pantalla `/restablecer` para elegir la nueva contraseña; agrega `https://TU-DOMINIO/restablecer` en
+*Redirect URLs*).
 
 ## Primer uso: verificar que lee bien tu base de datos
 
@@ -89,6 +107,15 @@ Al finalizar una visita la app:
 3. Marca al cliente como visitado en **clientes** (si la columna es booleana guarda `true`; si es texto,
    reutiliza el valor que ya usas, p. ej. `Visitado`). Si tu tabla de clientes no tiene esa columna, se
    considera visitado a todo cliente que tenga una visita registrada.
+
+Si tu tabla tiene columnas obligatorias que la app no conoce (por ejemplo `hora`, `fecha`, `id_cliente`), las
+llena según su nombre; si una columna es de tipo `time` envía solo la hora; y si la base rechaza un dato
+opcional (un estado que no está en tu lista, por ejemplo) guarda la visita sin él antes que perderla.
+
+Si aun así no se puede guardar, aparece la ventana **"No se pudo guardar la visita"** con la explicación y un
+**Detalle técnico** (paso, tabla, código y mensaje de Supabase). El promotor puede tocar **Copiar detalle** y
+mandártelo; con eso se sabe exactamente qué ajustar (casi siempre una política RLS o una columna). El último
+error también se incluye en *Copiar reporte* de **Verificar conexión**.
 
 Si se corta la señal a mitad del guardado, las respuestas siguen en el teléfono y al reintentar se reutiliza
 la visita ya creada (no se duplica). Si la app no logra identificar qué clientes son del usuario no muestra
@@ -126,6 +153,14 @@ Cada regla dice: *muestra la pregunta X cuando la respuesta a la pregunta Y es V
 - Varias reglas sobre la misma pregunta Y = basta que se cumpla una; sobre preguntas distintas = todas.
 - Si una pregunta queda oculta, su respuesta no se guarda y no cuenta para otras reglas.
 - También funciona el formato "salto": `pregunta_id` + `respuesta` + `siguiente_pregunta_id`.
+- La app deduce qué columna es cuál por su nombre aunque no sean los esperados (p. ej. `mostrar_pregunta` +
+  `pregunta_id` + `respuesta`, o `id_pregunta` + `id_pregunta_condicion`), y la regla puede referirse a la
+  pregunta por su `id`, su número/`orden`, su `codigo` o incluso su texto.
+
+En **Perfil → Verificar conexión → Reglas de las preguntas** ves cuántas reglas leyó y aplicó, qué columna
+tomó para cada parte, cómo interpretó cada regla ("Se muestra P3 si P1 = «Sí»") y cuáles no pudo usar y por
+qué. Si ahí dice que se aplican 0, comparte ese reporte (*Copiar reporte*) o ajusta los nombres en
+`src/config/schema.ts` → `reglas`.
 
 ## Seguridad recomendada
 
