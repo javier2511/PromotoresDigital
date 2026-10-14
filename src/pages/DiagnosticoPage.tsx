@@ -216,7 +216,13 @@ export function DiagnosticoPage() {
             <Card className="space-y-2 p-4 text-sm">
               <p className="font-semibold">Tus datos</p>
               <p className="text-muted">
-                {ctx.owner ? (
+                {ctx.owner?.error ? (
+                  <span className="text-red-700 dark:text-red-300">
+                    La columna <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.owner.column}</code> de clientes no
+                    se pudo comparar con tu usuario ({ctx.owner.error}). Por seguridad no se muestran clientes. Revisa qué valor
+                    guardas en esa columna (uuid del usuario, su correo o el id de tu tabla de usuarios).
+                  </span>
+                ) : ctx.owner ? (
                   <>
                     Clientes filtrados por <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.owner.column}</code>{' '}
                     = tu {ctx.owner.via === 'email' ? 'correo' : ctx.owner.via === 'perfil' ? 'id de usuario (tabla de usuarios)' : 'id de usuario (uuid)'}

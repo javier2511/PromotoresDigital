@@ -1,6 +1,9 @@
 import { CircleCheck, LocateFixed, LocateOff, MapPinOff, Navigation, SatelliteDish } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { RADIO_VISITA_M } from '../config/app'
 import type { Cliente } from '../data/clientes'
+import type { PosicionVisita } from '../data/visitas'
 import { distanceMeters, formatDistance } from '../lib/geo'
 import { useGeo, type GeoPosition } from '../providers/GeoProvider'
 import { Button } from './ui/Button'
@@ -29,6 +32,53 @@ export function useVisitGate(cliente: Cliente | undefined): GateState {
   if (status === 'prompt') return { kind: 'prompt' }
   if (status === 'unavailable') return { kind: 'unavailable' }
   return { kind: 'locating' }
+}
+
+export interface VisitStart {
+  startedAt: number
+  answers: Record<string, never>
+  position: PosicionVisita
+}
+
+/**
+ * Al tocar "Iniciar visita" se pide una lectura de GPS nueva (no la última mostrada, que puede ser vieja)
+ * y se vuelve a medir la distancia. Devuelve los datos de inicio, o null si no está en el punto de venta.
+ */
+export function useStartVisit(cliente: Cliente | undefined) {
+  const { getFresh } = useGeo()
+  const [checking, setChecking] = useState(false)
+
+  const start = async (): Promise<VisitStart | null> => {
+    if (!cliente?.location) return null
+    setChecking(true)
+    try {
+      const position = await getFresh()
+      const distance = distanceMeters(position, cliente.location)
+      if (distance > RADIO_VISITA_M) {
+        toast.warning(
+          `Estás a ${formatDistance(distance)} del cliente. Acércate a menos de ${formatDistance(RADIO_VISITA_M)} para iniciar.`,
+        )
+        return null
+      }
+      return {
+        startedAt: Date.now(),
+        answers: {},
+        position: { lat: position.lat, lng: position.lng, accuracy: position.accuracy, distance },
+      }
+    } catch (error) {
+      const code = (error as GeolocationPositionError | null)?.code
+      toast.error(
+        code === 1
+          ? 'Permite el acceso a tu ubicación para iniciar la visita.'
+          : 'No se pudo confirmar tu ubicación. Revisa que el GPS esté encendido e inténtalo de nuevo.',
+      )
+      return null
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return { start, checking }
 }
 
 /** Tarjeta que explica si la visita está desbloqueada y por qué. */

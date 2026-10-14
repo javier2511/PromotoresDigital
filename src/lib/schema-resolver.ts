@@ -29,6 +29,11 @@ export interface OwnerFilter {
   via: 'uid' | 'email' | 'perfil'
   /** ¿Se encontró al menos un cliente con este filtro? */
   matched: boolean
+  /**
+   * La columna existe pero ninguna forma de compararla con el usuario funcionó (p. ej. es un número y no
+   * hay tabla de usuarios). En ese caso NO se muestran clientes: sería mostrar los de todos los promotores.
+   */
+  error?: string
 }
 
 export interface Perfil {
@@ -47,7 +52,9 @@ export interface SchemaContext {
 // Errores de PostgREST
 // ---------------------------------------------------------------------------
 
-export function isMissingTableError(error: PostgrestError | null): boolean {
+type ErrorInfo = Pick<PostgrestError, 'code' | 'message'>
+
+export function isMissingTableError(error: ErrorInfo | null): boolean {
   if (!error) return false
   return (
     error.code === 'PGRST205' ||
@@ -56,7 +63,7 @@ export function isMissingTableError(error: PostgrestError | null): boolean {
   )
 }
 
-export function isMissingColumnError(error: PostgrestError | null): boolean {
+export function isMissingColumnError(error: ErrorInfo | null): boolean {
   if (!error) return false
   return (
     error.code === '42703' ||
@@ -179,6 +186,7 @@ async function resolvePerfil(t: ResolvedTable<FieldsOf<'perfiles'>>, user: User)
   for (const [column, value, op] of tries) {
     const query = supabase.from(t.table).select('*').limit(1)
     const { data, error } = await (op === 'eq' ? query.eq(column, value) : query.ilike(column, value))
+    if (isNetworkError(error)) throw new OfflineError()
     const row = (data as Row[] | null)?.[0]
     if (!error && row) {
       const nombre = t.columns.nombre ? row[t.columns.nombre] : null
@@ -213,15 +221,21 @@ async function resolveOwner(
   const column = t.columns.asignadoA
   if (!t.table || !column) return null
   let fallback: OwnerFilter | null = null
+  let lastError = 'no se pudo comparar con tu usuario'
   for (const c of ownerCandidates(column, user, perfil)) {
     const query = supabase.from(t.table).select('*', { count: 'exact', head: true })
     const { count, error } = await (c.op === 'eq' ? query.eq(column, c.value) : query.ilike(column, String(c.value)))
-    if (error) continue // p. ej. columna numérica comparada con un uuid
+    if (isNetworkError(error)) throw new OfflineError()
+    if (error) {
+      // p. ej. columna numérica comparada con un uuid: se prueba la siguiente forma.
+      lastError = error.message
+      continue
+    }
     const filter: OwnerFilter = { column, value: c.value, op: c.op, via: c.via, matched: (count ?? 0) > 0 }
     if (filter.matched) return filter
     fallback ??= filter
   }
-  return fallback
+  return fallback ?? { column, value: '', op: 'eq', via: 'uid', matched: false, error: lastError }
 }
 
 // ---------------------------------------------------------------------------
@@ -289,12 +303,24 @@ export async function loadSchema(user: User, { force = false } = {}): Promise<Sc
   return ctx
 }
 
+/** Columnas que por su nombre guardan el id de Supabase Auth (uuid), no el id de la tabla de usuarios. */
+const AUTH_ID_COLUMN = /^(user_id|uid|user_uid|auth_id|auth_user_id|id_auth)$/i
+
 /** Valor con el que se identifica al usuario en una columna "dueño" de otra tabla (visitas, respuestas…). */
-export function ownerValueFor(column: string, ctx: SchemaContext, user: User): string | number {
+export function ownerValueFor(
+  column: string,
+  ctx: Pick<SchemaContext, 'owner' | 'perfil'>,
+  user: Pick<User, 'id' | 'email'>,
+): string | number {
   if (looksLikeEmailColumn(column)) return user.email ?? user.id
-  const via = ctx.owner?.via
-  // Misma columna que en clientes: mismo formato (uuid, correo o id de perfil).
-  if (ctx.owner?.column === column && via === 'email') return user.email ?? user.id
-  if (via === 'perfil' && ctx.perfil) return ctx.perfil.id
+  const owner = ctx.owner && !ctx.owner.error ? ctx.owner : null
+  // Misma columna que en clientes: mismo formato con el que se encontraron sus clientes.
+  if (owner && owner.column === column) {
+    if (owner.via === 'email') return user.email ?? user.id
+    if (owner.via === 'perfil' && ctx.perfil) return ctx.perfil.id
+    return user.id
+  }
+  if (AUTH_ID_COLUMN.test(column)) return user.id
+  if (owner?.via === 'perfil' && ctx.perfil) return ctx.perfil.id
   return user.id
 }

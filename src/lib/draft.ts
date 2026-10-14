@@ -5,6 +5,8 @@ export interface VisitDraft {
   startedAt: number
   answers: Answers
   position: { lat: number; lng: number; accuracy: number; distance: number } | null
+  /** La fila de la visita ya se insertó (falló un paso posterior): al reintentar se reutiliza, no se duplica. */
+  visita?: { id: string | number | null }
   updatedAt: number
 }
 
@@ -56,4 +58,39 @@ export function draftClienteKeys(userId: string): Set<string> {
     /* sin almacenamiento */
   }
   return keys
+}
+
+// ---------------------------------------------------------------------------
+// Visitas finalizadas cuyo cliente no se pudo marcar como visitado en la base
+// ---------------------------------------------------------------------------
+
+const RECENT_TTL_MS = 24 * 60 * 60 * 1000
+const recentKey = (userId: string) => `pd.finalizadas.${userId}`
+
+function readRecent(userId: string): Record<string, number> {
+  try {
+    return (JSON.parse(localStorage.getItem(recentKey(userId)) ?? '{}') as Record<string, number>) ?? {}
+  } catch {
+    return {}
+  }
+}
+
+/** Recuerda (24 h) que este cliente ya se visitó, para no ofrecerlo otra vez aunque la base no lo marcara. */
+export function rememberFinished(userId: string, clienteKey: string) {
+  try {
+    const now = Date.now()
+    const entries = Object.entries(readRecent(userId)).filter(([, at]) => now - at < RECENT_TTL_MS)
+    localStorage.setItem(recentKey(userId), JSON.stringify(Object.fromEntries([...entries, [clienteKey, now]])))
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+export function recentlyFinished(userId: string): Set<string> {
+  const now = Date.now()
+  return new Set(
+    Object.entries(readRecent(userId))
+      .filter(([, at]) => now - at < RECENT_TTL_MS)
+      .map(([key]) => key),
+  )
 }

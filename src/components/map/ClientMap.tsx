@@ -242,12 +242,15 @@ export default function ClientMap({
     }
 
     let loaded = false
-    map.on('error', () => {
-      if (!loaded) setFailed(true)
+    map.on('error', (e) => {
+      // Una tesela o fuente que falla no impide usar el mapa; solo cuenta si no cargó el estilo.
+      const tileOrSource = 'sourceId' in e || 'tile' in e
+      if (!loaded && !tileOrSource && !map.isStyleLoaded()) setFailed(true)
     })
 
     map.on('load', () => {
       loaded = true
+      setFailed(false)
       map.addImage('pin-pending', pinImage(COLORS.pending, 'pending'), { pixelRatio: 2 })
       map.addImage('pin-visited', pinImage(COLORS.visited, 'visited'), { pixelRatio: 2 })
 
@@ -432,14 +435,18 @@ export default function ClientMap({
     if (beam) showHeading(beam, heading)
   }, [heading, me, ready])
 
-  // Pin seleccionado (más grande, con animación) y centrado.
+  // Pin seleccionado (más grande, con animación) y centrado. Se recalcula si llegan los datos después del mapa.
+  const selected = clientes.find((c) => c.key === selectedKey)
+  const selectedSignature = selected?.location
+    ? `${selected.key}:${selected.visitado ? 1 : 0}:${selected.location.lat},${selected.location.lng}`
+    : ''
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready) return
     selectedMarker.current?.remove()
     selectedMarker.current = null
     const cliente = live.current.clientes.find((c) => c.key === selectedKey)
-    if (!cliente?.location) return
+    if (!selectedSignature || !cliente?.location) return
     const { lng, lat } = cliente.location
     selectedMarker.current = new Marker({ element: selectedPinElement(cliente.visitado), anchor: 'bottom' })
       .setLngLat([lng, lat])
@@ -452,7 +459,7 @@ export default function ClientMap({
         duration: 600,
       })
     }
-  }, [selectedKey, ready, variant])
+  }, [selectedKey, selectedSignature, ready, variant])
 
   useImperativeHandle(ref, () => ({
     locateMe: () => {

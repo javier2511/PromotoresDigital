@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js'
+import { isNetworkError } from '../lib/errors'
 import { ownerCandidates, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { fetchAll } from './clientes'
@@ -21,22 +22,28 @@ export async function fetchResultados(
   const t = ctx.tables.resultados
   if (!t.table) return { table: null, rows: [], filtro: 'ninguno' }
   const table = t.table
-  const order = (q: ReturnType<ReturnType<typeof supabase.from>['select']>) =>
-    t.columns.fecha ? q.order(t.columns.fecha, { ascending: false }) : q
+  // Orden estable para paginar: por fecha (más reciente primero) y desempate por id si existe.
+  const order = (q: ReturnType<ReturnType<typeof supabase.from>['select']>) => {
+    const byDate = t.columns.fecha ? q.order(t.columns.fecha, { ascending: false }) : q
+    return t.allColumns?.includes('id') ? byDate.order('id', { ascending: true }) : byDate
+  }
 
   const userCol = t.columns.usuario
   if (userCol) {
     for (const c of ownerCandidates(userCol, user, ctx.perfil)) {
       const rows = await fetchAll(() => {
-        const q = order(supabase.from(table).select('*'))
+        const q = order(supabase.from(table).select('*', { count: 'exact' }))
         return c.op === 'eq' ? q.eq(userCol, c.value) : q.ilike(userCol, String(c.value))
-      }).catch(() => null)
+      }).catch((error: unknown) => {
+        if (isNetworkError(error)) throw error
+        return null // p. ej. la columna es numérica y se comparó con un uuid: se prueba la siguiente forma
+      })
       if (rows && rows.length > 0) return { table, rows: rows.slice(0, MAX_ROWS), filtro: 'usuario' }
     }
     return { table, rows: [], filtro: 'usuario' }
   }
 
-  const rows = await fetchAll(() => order(supabase.from(table).select('*')))
+  const rows = await fetchAll(() => order(supabase.from(table).select('*', { count: 'exact' })))
   const clienteCol = t.columns.cliente
   if (clienteCol) {
     const mine = rows.filter((r) => clienteKeys.has(String(r[clienteCol])))

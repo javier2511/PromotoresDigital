@@ -90,6 +90,11 @@ Al finalizar una visita la app:
    reutiliza el valor que ya usas, p. ej. `Visitado`). Si tu tabla de clientes no tiene esa columna, se
    considera visitado a todo cliente que tenga una visita registrada.
 
+Si se corta la señal a mitad del guardado, las respuestas siguen en el teléfono y al reintentar se reutiliza
+la visita ya creada (no se duplica). Al tocar *Iniciar visita* la distancia se vuelve a medir con una lectura
+de GPS reciente, y si la app no logra identificar qué clientes son del usuario no muestra ninguno (nunca los
+de otros promotores).
+
 ### Reglas de preguntas (`preguntas_reglas`)
 
 Cada regla dice: *muestra la pregunta X cuando la respuesta a la pregunta Y es V*.

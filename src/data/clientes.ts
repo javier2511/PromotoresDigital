@@ -1,6 +1,7 @@
 import type { PostgrestError, User } from '@supabase/supabase-js'
 import { VALORES_VISITADO } from '../config/schema'
 import { locationFromColumns, parseLocation, type LatLng } from '../lib/geo'
+import { recentlyFinished } from '../lib/draft'
 import { likeExact, ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
 import { normalize, toBoolean } from '../lib/text'
@@ -24,18 +25,29 @@ export class SchemaError extends Error {}
 const PAGE = 1000
 
 interface RangeQuery {
-  range(from: number, to: number): PromiseLike<{ data: unknown; error: PostgrestError | null }>
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{ data: unknown; error: PostgrestError | null; count?: number | null }>
 }
 
-/** Lee todas las filas de una consulta, de 1000 en 1000 (límite por defecto de Supabase). */
+/**
+ * Lee todas las filas de una consulta por páginas. Usa el total (consultas con `count: 'exact'`) para
+ * saber cuándo terminar aunque tu proyecto limite las filas por respuesta a menos de 1000.
+ * La consulta debe tener un orden estable (`order` por una columna única) para no saltar ni repetir filas.
+ */
 export async function fetchAll(build: () => RangeQuery): Promise<Row[]> {
   const rows: Row[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await build().range(from, from + PAGE - 1)
+  let total: number | null = null
+  for (let from = 0; ; ) {
+    const { data, error, count } = await build().range(from, from + PAGE - 1)
     if (error) throw error
     const page = (data as Row[] | null) ?? []
+    if (typeof count === 'number') total = count
     rows.push(...page)
-    if (page.length < PAGE) return rows
+    from += page.length
+    if (page.length === 0) return rows
+    if (total !== null ? rows.length >= total : page.length < PAGE) return rows
   }
 }
 
@@ -89,9 +101,13 @@ async function fetchVisitedIds(ctx: SchemaContext, user: User): Promise<Set<stri
   const v = ctx.tables.visitas
   if (!v.table || !v.columns.cliente) return new Set()
   const clienteCol = v.columns.cliente
+  const idCol = v.columns.id
   const usuarioCol = v.columns.usuario
   const rows = await fetchAll(() => {
-    const q = supabase.from(v.table!).select(clienteCol)
+    const q = supabase
+      .from(v.table!)
+      .select(idCol ? `${clienteCol},${idCol}` : clienteCol, { count: 'exact' })
+      .order(idCol ?? clienteCol, { ascending: true })
     return usuarioCol ? whereUser(q, usuarioCol, ownerValueFor(usuarioCol, ctx, user)) : q
   })
   return new Set(rows.map((r) => String(r[clienteCol])))
@@ -102,15 +118,26 @@ export async function fetchClientes(ctx: SchemaContext, user: User): Promise<Cli
   if (!t.table) throw new SchemaError('No se encontró la tabla de clientes en Supabase.')
   if (!t.columns.id) throw new SchemaError(`La tabla "${t.table}" no tiene una columna de id reconocible.`)
   const owner = ctx.owner
+  if (owner?.error) {
+    // Nunca se muestran clientes sin filtrar: serían los de todos los promotores.
+    throw new SchemaError(
+      `No se pudo identificar tus clientes: la columna "${owner.column}" de "${t.table}" no coincide con tu usuario (${owner.error}).`,
+    )
+  }
   const [rows, visitedIds] = await Promise.all([
     fetchAll(() => {
-      const q = supabase.from(t.table!).select('*').order(t.columns.id!, { ascending: true })
+      const q = supabase.from(t.table!).select('*', { count: 'exact' }).order(t.columns.id!, { ascending: true })
       if (!owner) return q
       return owner.op === 'eq' ? q.eq(owner.column, owner.value) : q.ilike(owner.column, String(owner.value))
     }),
     t.columns.visitado ? Promise.resolve(null) : fetchVisitedIds(ctx, user),
   ])
-  return rows.map((row) => toCliente(row, ctx, visitedIds))
+  // Visitas finalizadas en este teléfono cuyo "visitado" la base no dejó guardar (no se vuelven a ofrecer).
+  const recientes = recentlyFinished(user.id)
+  return rows.map((row) => {
+    const cliente = toCliente(row, ctx, visitedIds)
+    return recientes.has(cliente.key) ? { ...cliente, visitado: true } : cliente
+  })
 }
 
 /** Valor a escribir en la columna "visitado", imitando lo que ya hay en tus datos. */

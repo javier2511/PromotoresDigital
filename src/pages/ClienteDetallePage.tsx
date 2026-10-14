@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router'
 import { ClienteAvatar } from '../components/ClienteAvatar'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
-import { useVisitGate, VisitGateCard } from '../components/VisitGate'
+import { useStartVisit, useVisitGate, VisitGateCard } from '../components/VisitGate'
 import { Badge } from '../components/ui/Badge'
 import { Button, ButtonLink, buttonClass } from '../components/ui/Button'
 import { Card, SectionTitle } from '../components/ui/Card'
@@ -52,6 +52,7 @@ export function ClienteDetallePage() {
   const { clientes, ctx, isPending, error, refetch } = useClientes()
   const cliente = clientes?.find((c) => c.key === id)
   const gate = useVisitGate(cliente)
+  const { start, checking } = useStartVisit(cliente)
   const draft = cliente ? loadDraft(user.id, cliente.key) : null
   const props = useMemo(() => (cliente && ctx ? propiedades(cliente, ctx) : []), [cliente, ctx])
 
@@ -90,19 +91,11 @@ export function ClienteDetallePage() {
     )
   }
 
-  const iniciar = () => {
+  const iniciar = async () => {
     if (!draft) {
-      if (gate.kind !== 'ok') return
-      saveDraft(user.id, cliente.key, {
-        startedAt: Date.now(),
-        answers: {},
-        position: {
-          lat: gate.position.lat,
-          lng: gate.position.lng,
-          accuracy: gate.position.accuracy,
-          distance: gate.distance,
-        },
-      })
+      const inicio = await start()
+      if (!inicio) return
+      saveDraft(user.id, cliente.key, inicio)
     }
     navigate(`/clientes/${encodeURIComponent(cliente.key)}/visita`)
   }
@@ -206,23 +199,24 @@ export function ClienteDetallePage() {
       {/* Acción principal */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-card/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:left-64">
         <div className="mx-auto max-w-3xl">
-          {cliente.visitado ? (
-            <Button size="lg" variant="success" className="w-full" disabled icon={<CircleCheck className="size-5" />}>
-              Visita finalizada
-            </Button>
-          ) : draft ? (
+          {draft ? (
             <Button size="lg" className="w-full" onClick={iniciar} icon={<ClipboardList className="size-5" />}>
               Continuar visita
+            </Button>
+          ) : cliente.visitado ? (
+            <Button size="lg" variant="success" className="w-full" disabled icon={<CircleCheck className="size-5" />}>
+              Visita finalizada
             </Button>
           ) : (
             <Button
               size="lg"
               className="w-full"
               onClick={iniciar}
+              loading={checking}
               disabled={gate.kind !== 'ok'}
               icon={<Play className="size-5 fill-current" />}
             >
-              {gate.kind === 'ok' ? 'Iniciar visita' : 'Acércate para iniciar la visita'}
+              {checking ? 'Confirmando ubicación…' : gate.kind === 'ok' ? 'Iniciar visita' : 'Acércate para iniciar la visita'}
             </Button>
           )}
         </div>

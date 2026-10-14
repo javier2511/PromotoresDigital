@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
 import { QuestionInput } from '../components/QuestionField'
-import { useVisitGate, VisitGateCard } from '../components/VisitGate'
+import { useStartVisit, useVisitGate, VisitGateCard } from '../components/VisitGate'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
@@ -15,8 +15,8 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
 import type { Cliente } from '../data/clientes'
 import { queryKeys, useClientes, useFormulario } from '../data/hooks'
-import { finalizarVisita } from '../data/visitas'
-import { clearDraft, loadDraft, saveDraft, type VisitDraft } from '../lib/draft'
+import { borrarVisita, finalizarVisita } from '../data/visitas'
+import { clearDraft, loadDraft, rememberFinished, saveDraft, type VisitDraft } from '../lib/draft'
 import { friendlyError, isNetworkError } from '../lib/errors'
 import { isAnswered, type AnswerValue } from '../lib/questions'
 import { visibleQuestions } from '../lib/rules'
@@ -46,6 +46,7 @@ export function VisitaPage() {
   const { formulario, isPending: formPending, error: formError, refetch: refetchForm } = useFormulario()
   const cliente = clientes?.find((c) => c.key === id)
   const gate = useVisitGate(cliente)
+  const { start, checking } = useStartVisit(cliente)
 
   const [draft, setDraft] = useState<VisitDraft | null>(() => loadDraft(user.id, id))
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -53,16 +54,12 @@ export function VisitaPage() {
   const [highlight, setHighlight] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const finished = useRef(false)
+  const [discarding, setDiscarding] = useState(false)
 
-  // Entrada directa (enlace o recarga) sin visita empezada: se inicia con un toque si está en el punto de venta.
-  const iniciar = () => {
-    if (gate.kind !== 'ok') return
-    setDraft({
-      startedAt: Date.now(),
-      answers: {},
-      position: { lat: gate.position.lat, lng: gate.position.lng, accuracy: gate.position.accuracy, distance: gate.distance },
-      updatedAt: Date.now(),
-    })
+  // Entrada directa (enlace o recarga) sin visita empezada: se inicia con un toque, confirmando la ubicación.
+  const iniciar = async () => {
+    const inicio = await start()
+    if (inicio) setDraft({ ...inicio, updatedAt: Date.now() })
   }
 
   // Autoguardado del borrador en el teléfono.
@@ -96,10 +93,14 @@ export function VisitaPage() {
         answers,
         startedAt: draft!.startedAt,
         position: draft!.position,
+        visitaPrevia: draft!.visita,
+        // Si después falla otro paso, el reintento reutiliza esta visita en lugar de crear otra.
+        onVisitaGuardada: (visita) => setDraft((prev) => (prev ? { ...prev, visita } : prev)),
       }),
     onSuccess: (result) => {
       finished.current = true
       clearDraft(user.id, id)
+      if (result.warning) rememberFinished(user.id, id)
       queryClient.setQueryData<Cliente[]>(queryKeys.clientes(user.id), (old) =>
         old?.map((c) => (c.key === id ? { ...c, visitado: true } : c)),
       )
@@ -163,7 +164,9 @@ export function VisitaPage() {
       </>
     )
   }
-  if (cliente.visitado && !mutation.isPending && !mutation.isSuccess) {
+  // Con una visita empezada se muestra el formulario aunque el cliente ya aparezca como visitado
+  // (p. ej. la visita se guardó pero faltó un paso): así se puede terminar o descartar.
+  if (cliente.visitado && !draft && !mutation.isPending && !mutation.isSuccess) {
     return (
       <>
         <TopBar title={cliente.nombre} backTo="/" />
@@ -186,10 +189,11 @@ export function VisitaPage() {
             size="lg"
             className="w-full"
             disabled={gate.kind !== 'ok'}
+            loading={checking}
             onClick={iniciar}
             icon={<Play className="size-5 fill-current" />}
           >
-            Iniciar visita
+            {checking ? 'Confirmando ubicación…' : 'Iniciar visita'}
           </Button>
           <p className="text-center text-sm text-muted">El formulario se desbloquea al llegar al punto de venta.</p>
         </div>
@@ -315,8 +319,20 @@ export function VisitaPage() {
         title="¿Descartar esta visita?"
         confirmLabel="Descartar"
         confirmVariant="danger"
+        loading={discarding}
         onCancel={() => setDiscardOpen(false)}
-        onConfirm={() => {
+        onConfirm={async () => {
+          // Si la visita llegó a guardarse a medias, se intenta borrar para no dejarla huérfana.
+          const parcial = draft.visita
+          if (parcial && parcial.id !== null && ctx) {
+            setDiscarding(true)
+            const borrada = await borrarVisita(ctx, parcial.id)
+            setDiscarding(false)
+            if (!borrada) {
+              toast.error('No se pudo borrar la visita guardada a medias. Revisa tu conexión e inténtalo de nuevo.')
+              return
+            }
+          }
           finished.current = true
           clearDraft(user.id, id)
           toast('Visita descartada')

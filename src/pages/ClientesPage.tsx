@@ -126,7 +126,7 @@ export function ClientesPage() {
   const nombre =
     ctx?.perfil?.nombre?.split(' ')[0] ??
     (user.user_metadata?.full_name as string | undefined)?.split(' ')[0] ??
-    user.email?.split('@')[0]
+    user.email?.split('@')[0].split(/[._-]/)[0]
 
   const masCercanoKey =
     orden === 'cercania' && filtro !== 'visitados' && !q

@@ -69,8 +69,13 @@ export async function fetchFormulario(ctx: SchemaContext): Promise<Formulario> {
   const reglasUsable = Boolean(r.table && r.columns.pregunta && r.columns.dependeDe)
 
   const [preguntaRows, reglaRows] = await Promise.all([
-    fetchAll(() => supabase.from(p.table!).select('*').order(p.columns.id!, { ascending: true })),
-    reglasUsable ? fetchAll(() => supabase.from(r.table!).select('*')) : Promise.resolve([] as Row[]),
+    fetchAll(() => supabase.from(p.table!).select('*', { count: 'exact' }).order(p.columns.id!, { ascending: true })),
+    reglasUsable
+      ? fetchAll(() => {
+          const q = supabase.from(r.table!).select('*', { count: 'exact' })
+          return r.columns.id ? q.order(r.columns.id, { ascending: true }) : q
+        })
+      : Promise.resolve([] as Row[]),
   ])
 
   const activeCol = p.columns.activa
