@@ -15,7 +15,7 @@ import { Skeleton } from '../components/ui/Skeleton'
 import { RADIO_VISITA_M } from '../config/app'
 import { useClientes, useSchema, type ClienteConDistancia, type Progreso } from '../data/hooks'
 import { DIAS } from '../lib/dias'
-import { filtrarPorDia, useFiltroDia } from '../lib/filtro-dia'
+import { filtrarPorDia, SIN_DIA, useFiltroDia } from '../lib/filtro-dia'
 import { draftClienteKeys } from '../lib/draft'
 import { normalize } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
@@ -115,7 +115,7 @@ export function ClientesPage() {
     const visitados = delDia.filter((c) => c.visitado).length
     return { pendientes: delDia.length - visitados, visitados, todos: delDia.length }
   }, [delDia])
-  const nombreDia = dia ? DIAS[dia - 1].largo.toLowerCase() : null
+  const nombreDia = dia === null ? null : dia === SIN_DIA ? 'sin día' : DIAS[dia - 1].largo.toLowerCase()
 
   const lista = useMemo(() => {
     const term = normalize(q)
@@ -143,7 +143,7 @@ export function ClientesPage() {
     user.email?.split('@')[0].split(/[._-]/)[0]
 
   const masCercanoKey =
-    orden === 'cercania' && filtro !== 'visitados' && !q && !dia
+    orden === 'cercania' && filtro !== 'visitados' && !q && dia === null
       ? lista.find((c) => !c.visitado && c.distance !== null)?.key
       : undefined
 
@@ -258,11 +258,13 @@ export function ClientesPage() {
                 icon={CalendarDays}
                 tone={filtro === 'pendientes' && delDia.length > 0 ? 'success' : undefined}
                 title={
-                  delDia.length === 0
-                    ? `No tienes clientes para el ${nombreDia}`
-                    : filtro === 'pendientes'
-                      ? `¡Terminaste los clientes del ${nombreDia}!`
-                      : `Sin visitas del ${nombreDia} todavía`
+                  dia === SIN_DIA
+                    ? 'No hay clientes sin día en este filtro'
+                    : delDia.length === 0
+                      ? `No tienes clientes para el ${nombreDia}`
+                      : filtro === 'pendientes'
+                        ? `¡Terminaste los clientes del ${nombreDia}!`
+                        : `Sin visitas del ${nombreDia} todavía`
                 }
               >
                 <button type="button" onClick={() => setDia(null)} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">

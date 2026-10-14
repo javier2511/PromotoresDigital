@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Cliente } from '../data/clientes'
 import { DIAS, diaHoy } from '../lib/dias'
+import { SIN_DIA } from '../lib/filtro-dia'
 import { cn } from './ui/cn'
 
 /**
@@ -24,7 +25,12 @@ export function FiltroDias({
   const conDia = new Set(clientes.flatMap((c) => c.dias))
   if (conDia.size === 0) return null
   const conteo = new Map<number, number>()
-  for (const c of conteoDe) for (const d of c.dias) conteo.set(d, (conteo.get(d) ?? 0) + 1)
+  for (const c of conteoDe) {
+    // Un cliente con varios días ("lunesmartes") cuenta en cada uno de ellos.
+    if (c.dias.length === 0) conteo.set(SIN_DIA, (conteo.get(SIN_DIA) ?? 0) + 1)
+    for (const d of c.dias) conteo.set(d, (conteo.get(d) ?? 0) + 1)
+  }
+  const haySinDia = clientes.some((c) => c.dias.length === 0)
 
   const chip = (activo: boolean, onClick: () => void, contenido: ReactNode, ariaLabel: string, esHoy = false) => (
     <button
@@ -71,6 +77,18 @@ export function FiltroDias({
           </span>
         )
       })}
+      {(haySinDia || dia === SIN_DIA) &&
+        chip(
+          dia === SIN_DIA,
+          () => onChange(dia === SIN_DIA ? null : SIN_DIA),
+          <>
+            Sin día
+            <span className={cn('rounded-full px-1.5 text-[11px] tabular-nums', dia === SIN_DIA ? 'bg-white/20' : 'bg-soft text-muted')}>
+              {conteo.get(SIN_DIA) ?? 0}
+            </span>
+          </>,
+          `Sin día de visita: ${conteo.get(SIN_DIA) ?? 0} clientes`,
+        )}
     </div>
   )
 }

@@ -155,8 +155,11 @@ nuevas solos en menos de una hora.
 
 Si la tabla de clientes tiene la columna `dia_visita`, la lista y el mapa muestran botones *Todos los días · Lun ·
 Mar · Mié…* con cuántos clientes hay cada día (el de hoy lleva un punto). Entiende "Martes", "MARTES", "Mar",
-números (1 = lunes … 7 = domingo) y varios días en la misma celda ("Lunes, Jueves", "L/J"). El día elegido se
-recuerda en el teléfono y vale para la lista y el mapa; el avance de arriba siempre cuenta todos los clientes.
+números (1 = lunes … 7 = domingo) y varios días en la misma celda, separados o pegados ("Lunes, Jueves", "L/J",
+"lunesmartes"). Un cliente con varios días aparece (y cuenta) en cada uno de ellos, así que la suma de los días
+puede ser mayor que el total. Los que no tienen día (o tienen un valor que no se reconoce) quedan en **Sin día**.
+El día elegido se recuerda en el teléfono y vale para la lista y el mapa; el avance de arriba siempre cuenta
+todos los clientes.
 
 ### Jornada del promotor (inicio y fin del día)
 

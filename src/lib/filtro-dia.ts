@@ -3,10 +3,15 @@ import type { Cliente } from '../data/clientes'
 
 const STORAGE_KEY = 'pd.filtroDia'
 
+/** Valor del filtro para los clientes sin día de visita (celda vacía o que no se reconoce). */
+export const SIN_DIA = 0
+
 function leerDia(): number | null {
   try {
-    const n = Number(localStorage.getItem(STORAGE_KEY))
-    return n >= 1 && n <= 7 ? n : null
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw === null || raw === '') return null
+    const n = Number(raw)
+    return Number.isInteger(n) && n >= SIN_DIA && n <= 7 ? n : null
   } catch {
     return null
   }
@@ -18,7 +23,7 @@ export function useFiltroDia(): [number | null, (dia: number | null) => void] {
   const setDia = useCallback((nuevo: number | null) => {
     setDiaState(nuevo)
     try {
-      if (nuevo) localStorage.setItem(STORAGE_KEY, String(nuevo))
+      if (nuevo !== null) localStorage.setItem(STORAGE_KEY, String(nuevo))
       else localStorage.removeItem(STORAGE_KEY)
     } catch {
       /* sin almacenamiento */
@@ -28,5 +33,6 @@ export function useFiltroDia(): [number | null, (dia: number | null) => void] {
 }
 
 export function filtrarPorDia<T extends Pick<Cliente, 'dias'>>(clientes: T[], dia: number | null): T[] {
-  return dia ? clientes.filter((c) => c.dias.includes(dia)) : clientes
+  if (dia === null) return clientes
+  return clientes.filter((c) => (dia === SIN_DIA ? c.dias.length === 0 : c.dias.includes(dia)))
 }

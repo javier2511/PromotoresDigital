@@ -14,6 +14,14 @@ describe('diasDe', () => {
     expect(diasDe('L/J')).toEqual([1, 4])
     expect(diasDe(['Martes', 'Jueves'])).toEqual([2, 4])
   })
+  it('entiende días pegados sin separador', () => {
+    expect(diasDe('lunesmartes')).toEqual([1, 2])
+    expect(diasDe('LUNESMIERCOLESVIERNES')).toEqual([1, 3, 5])
+    expect(diasDe('MartesJueves')).toEqual([2, 4])
+    expect(diasDe('sábadodomingo')).toEqual([6, 7])
+    expect(diasDe('lunmie')).toEqual([1, 3])
+    expect(diasDe('lunes martesjueves')).toEqual([1, 2, 4])
+  })
   it('ignora lo que no es un día', () => {
     expect(diasDe(null)).toEqual([])
     expect(diasDe('')).toEqual([])

@@ -21,9 +21,13 @@ const ALIAS: Record<string, number> = {
   domingo: 7, dom: 7, do: 7, d: 7, sunday: 7, sun: 7,
 }
 
+const NOMBRES = /lunes|martes|miercoles|jueves|viernes|sabado|domingo/g
+const ABREVIADOS = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom']
+
 /**
  * Días que indica una celda de "día de visita": "Martes", "MARTES", "Mar", "2",
- * "Lunes, Jueves", "Lunes y Jueves", "L/J"… (1 = lunes; 0 o 7 = domingo).
+ * "Lunes, Jueves", "Lunes y Jueves", "L/J", y también pegados: "lunesmartes", "LUNMIE"…
+ * (1 = lunes; 0 o 7 = domingo).
  */
 export function diasDe(valor: unknown): number[] {
   if (valor === null || valor === undefined) return []
@@ -34,6 +38,16 @@ export function diasDe(valor: unknown): number[] {
       if (!token || token === 'y' || token === 'e') continue
       if (ALIAS[token]) dias.add(ALIAS[token])
       else if (/^[0-7]$/.test(token)) dias.add(Number(token) === 0 ? 7 : Number(token))
+      else {
+        // Nombres pegados: "lunesmartes", "lunesmiercolesviernes".
+        const nombres = token.match(NOMBRES)
+        if (nombres) for (const n of nombres) dias.add(ALIAS[n])
+        // Abreviaturas pegadas: "lunmie".
+        else if (token.length % 3 === 0) {
+          const trozos = token.match(/.{3}/g) ?? []
+          if (trozos.every((t) => ABREVIADOS.includes(t))) for (const t of trozos) dias.add(ALIAS[t])
+        }
+      }
     }
   }
   return [...dias].sort((a, b) => a - b)
