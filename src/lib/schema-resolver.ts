@@ -243,10 +243,13 @@ async function resolveOwner(
 // ---------------------------------------------------------------------------
 
 const CACHE_KEY = 'pd.schema.v1'
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+/** Cada hora se vuelve a revisar la base (así se detectan columnas nuevas, p. ej. las de distancia). */
+const CACHE_TTL_MS = 60 * 60 * 1000
+/** Subirlo obliga a todos los teléfonos a volver a detectar al publicar una versión nueva. */
+const DETECCION_VERSION = 2
 
 function configHash(): string {
-  const text = JSON.stringify(schema)
+  const text = JSON.stringify(schema) + DETECCION_VERSION
   let h = 0
   for (let i = 0; i < text.length; i++) h = (Math.imul(h, 31) + text.charCodeAt(i)) | 0
   return String(h)

@@ -12,7 +12,7 @@ export function LocationBanner({ className }: { className?: string }) {
     prompt: {
       icon: LocateFixed,
       title: 'Activa tu ubicación',
-      text: 'Para ver qué clientes tienes cerca y poder iniciar visitas.',
+      text: 'Para ver qué clientes tienes cerca y registrar dónde haces cada visita.',
       action: true,
     },
     denied: {

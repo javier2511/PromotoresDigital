@@ -43,7 +43,7 @@ interface ClientMapProps {
   ref?: Ref<ClientMapHandle>
 }
 
-const COLORS = { pending: '#ea4335', visited: '#16a34a', brand: '#4f46e5', me: '#1a73e8' }
+const COLORS = { pending: '#e4001b', visited: '#16a34a', brand: '#e4001b', cluster: '#1f1d21', me: '#1a73e8' }
 
 const LOCALE_ES: Record<string, string> = {
   'AttributionControl.ToggleAttribution': 'Mostrar créditos del mapa',
@@ -292,7 +292,7 @@ export default function ClientMap({
         source: 'clientes',
         filter: ['has', 'point_count'],
         paint: {
-          'circle-color': COLORS.brand,
+          'circle-color': COLORS.cluster,
           'circle-radius': ['step', ['get', 'point_count'], 17, 10, 21, 50, 27],
           'circle-stroke-width': 3,
           'circle-stroke-color': '#ffffff',

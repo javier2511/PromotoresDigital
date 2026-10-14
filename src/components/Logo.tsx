@@ -6,8 +6,8 @@ export function LogoMark({ className }: { className?: string }) {
     <svg viewBox="0 0 48 48" className={cn('size-10', className)} aria-hidden>
       <defs>
         <linearGradient id="pd-logo" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6366f1" />
-          <stop offset="1" stopColor="#4338ca" />
+          <stop offset="0" stopColor="#f8293b" />
+          <stop offset="1" stopColor="#bf0017" />
         </linearGradient>
       </defs>
       <rect width="48" height="48" rx="14" fill="url(#pd-logo)" />
@@ -18,7 +18,7 @@ export function LogoMark({ className }: { className?: string }) {
       <path
         d="m19.4 21.4 3.3 3.3 6.1-6.3"
         fill="none"
-        stroke="#4f46e5"
+        stroke="#e4001b"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"

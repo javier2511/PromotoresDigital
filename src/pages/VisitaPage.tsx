@@ -1,23 +1,25 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, CircleCheck, ClipboardList, Play, Save, SearchX, Trash2 } from 'lucide-react'
+import { Check, CircleCheck, ClipboardList, MapPin, Navigation, Save, SearchX, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
 import { QuestionInput } from '../components/QuestionField'
-import { useStartVisit, useVisitGate, VisitGateCard } from '../components/VisitGate'
+import { StartVisitButton, useVisitGate, VisitGateCard } from '../components/VisitGate'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { ConfirmDialog } from '../components/ui/Dialog'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
+import { RADIO_VISITA_M } from '../config/app'
 import type { Cliente } from '../data/clientes'
 import { queryKeys, useClientes, useFormulario } from '../data/hooks'
 import { borrarVisita, finalizarVisita } from '../data/visitas'
 import { clearDraft, loadDraft, rememberFinished, saveDraft, type VisitDraft } from '../lib/draft'
 import { friendlyError, isNetworkError } from '../lib/errors'
+import { formatDistance } from '../lib/geo'
 import { isAnswered, type AnswerValue } from '../lib/questions'
 import { visibleQuestions } from '../lib/rules'
 import { useUser } from '../providers/AuthProvider'
@@ -25,6 +27,34 @@ import { useUser } from '../providers/AuthProvider'
 export interface VisitaFinalizadaState {
   respuestas: number
   warning: string | null
+}
+
+/** Le recuerda al promotor a qué distancia del cliente inició la visita (queda registrada). */
+function DistanciaInicio({ distancia, conUbicacion }: { distancia: number | null; conUbicacion: boolean }) {
+  if (!conUbicacion) return null
+  if (distancia === null) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-xl border border-line bg-card px-3.5 py-2.5 text-sm text-muted">
+        <MapPin className="size-4 shrink-0" /> Se registró tu ubicación al iniciar la visita.
+      </div>
+    )
+  }
+  const lejos = distancia > RADIO_VISITA_M
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-sm',
+        lejos
+          ? 'border-amber-300/70 bg-amber-500/10 text-amber-900 dark:border-amber-800 dark:text-amber-200'
+          : 'border-emerald-300/60 bg-emerald-500/8 text-emerald-900 dark:border-emerald-800 dark:text-emerald-200',
+      )}
+    >
+      <Navigation className="size-4 shrink-0" />
+      {lejos
+        ? `Iniciaste esta visita a ${formatDistance(distancia)} del cliente. La distancia queda registrada.`
+        : `Iniciaste la visita en el punto de venta (a ${formatDistance(distancia)}).`}
+    </div>
+  )
 }
 
 function FormSkeleton() {
@@ -46,7 +76,6 @@ export function VisitaPage() {
   const { formulario, isPending: formPending, error: formError, refetch: refetchForm } = useFormulario()
   const cliente = clientes?.find((c) => c.key === id)
   const gate = useVisitGate(cliente)
-  const { start, checking } = useStartVisit(cliente)
 
   const [draft, setDraft] = useState<VisitDraft | null>(() => loadDraft(user.id, id))
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -56,11 +85,6 @@ export function VisitaPage() {
   const finished = useRef(false)
   const [discarding, setDiscarding] = useState(false)
 
-  // Entrada directa (enlace o recarga) sin visita empezada: se inicia con un toque, confirmando la ubicación.
-  const iniciar = async () => {
-    const inicio = await start()
-    if (inicio) setDraft({ ...inicio, updatedAt: Date.now() })
-  }
 
   // Autoguardado del borrador en el teléfono.
   useEffect(() => {
@@ -185,17 +209,8 @@ export function VisitaPage() {
         <TopBar title={cliente.nombre} subtitle="Iniciar visita" backTo={`/clientes/${encodeURIComponent(id)}`} />
         <div className="mx-auto max-w-2xl space-y-4 px-4 py-6">
           <VisitGateCard gate={gate} />
-          <Button
-            size="lg"
-            className="w-full"
-            disabled={gate.kind !== 'ok'}
-            loading={checking}
-            onClick={iniciar}
-            icon={<Play className="size-5 fill-current" />}
-          >
-            {checking ? 'Confirmando ubicación…' : 'Iniciar visita'}
-          </Button>
-          <p className="text-center text-sm text-muted">El formulario se desbloquea al llegar al punto de venta.</p>
+          <StartVisitButton cliente={cliente} onStart={(inicio) => setDraft({ ...inicio, updatedAt: Date.now() })} />
+          <p className="text-center text-sm text-muted">Al iniciar se registra tu ubicación y la distancia al cliente.</p>
         </div>
       </>
     )
@@ -230,6 +245,7 @@ export function VisitaPage() {
       </TopBar>
 
       <div className="mx-auto max-w-2xl space-y-3 px-4 pt-4 sm:px-6">
+        <DistanciaInicio distancia={draft.position?.distance ?? null} conUbicacion={Boolean(draft.position)} />
         <p className="flex items-center gap-2 px-1 text-xs text-muted">
           <Save className="size-3.5" /> Tus respuestas se guardan automáticamente en este teléfono.
         </p>

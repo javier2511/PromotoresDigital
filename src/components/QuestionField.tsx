@@ -26,7 +26,7 @@ function YesNo({ question, value, onChange }: FieldProps) {
           active
             ? kind === 'yes'
               ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
-              : 'border-slate-700 bg-slate-700 text-white dark:border-slate-500 dark:bg-slate-600'
+              : 'border-zinc-700 bg-zinc-700 text-white dark:border-zinc-500 dark:bg-zinc-600'
             : 'border-line bg-card text-fg hover:border-brand-300',
         )}
       >

@@ -1,24 +1,25 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   Tema: cambia la marca editando la escala "brand".
+   Tema: rojo de marca. Para cambiarlo edita la escala "brand" (600 es el color principal).
    --------------------------------------------------------------------------- */
 @theme {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
-  --color-brand-900: #312e81;
+  --color-brand-50: #fff1f2;
+  --color-brand-100: #ffe1e3;
+  --color-brand-200: #ffc8cd;
+  --color-brand-300: #ff9ca5;
+  --color-brand-400: #ff5f6d;
+  --color-brand-500: #f8293b;
+  --color-brand-600: #e4001b;
+  --color-brand-700: #bf0017;
+  --color-brand-800: #9e0618;
+  --color-brand-900: #820c1a;
+  --color-brand-950: #48020a;
 
   /* Pines del mapa y punto de ubicación (azul tipo Google Maps) */
-  --color-pin-pending: #ea4335;
+  --color-pin-pending: #e4001b;
   --color-pin-visited: #16a34a;
   --color-me: #1a73e8;
 
@@ -67,23 +68,23 @@
 
 /* Colores semánticos (claro / oscuro) */
 :root {
-  --bg: #f4f5fa;
+  --bg: #f5f5f6;
   --card: #ffffff;
-  --fg: #0f172a;
-  --muted: #64748b;
-  --line: #e6e8f0;
-  --soft: #eef0f6;
+  --fg: #18181b;
+  --muted: #6b6b75;
+  --line: #e8e6e7;
+  --soft: #f1f0f1;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0f1a;
-    --card: #131a2a;
-    --fg: #e8ebf3;
-    --muted: #94a0b8;
-    --line: #232c40;
-    --soft: #1a2234;
+    --bg: #0e0d0f;
+    --card: #19171a;
+    --fg: #f4f4f5;
+    --muted: #a3a1a8;
+    --line: #2a272b;
+    --soft: #221f23;
     color-scheme: dark;
   }
 }

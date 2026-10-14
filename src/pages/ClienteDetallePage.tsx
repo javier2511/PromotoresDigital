@@ -1,38 +1,22 @@
-import { CircleCheck, ClipboardList, MapPinOff, Navigation, Phone, Play, SearchX } from 'lucide-react'
-import { lazy, Suspense, useMemo } from 'react'
+import { CircleCheck, ClipboardList, MapPinOff, Navigation, Phone, SearchX } from 'lucide-react'
+import { lazy, Suspense } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { ClienteAvatar } from '../components/ClienteAvatar'
+import { ClienteInfo } from '../components/ClienteInfo'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
-import { useStartVisit, useVisitGate, VisitGateCard } from '../components/VisitGate'
+import { StartVisitButton, useVisitGate, VisitGateCard, type VisitStart } from '../components/VisitGate'
 import { Badge } from '../components/ui/Badge'
 import { Button, ButtonLink, buttonClass } from '../components/ui/Button'
-import { Card, SectionTitle } from '../components/ui/Card'
+import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
-import { PROPIEDADES_OCULTAS } from '../config/schema'
-import type { Cliente } from '../data/clientes'
 import { useClientes } from '../data/hooks'
 import { loadDraft, saveDraft } from '../lib/draft'
 import { googleMapsDirectionsUrl, wazeUrl } from '../lib/geo'
-import type { SchemaContext } from '../lib/schema-resolver'
-import { formatValue, humanize } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
 
 const ClientMap = lazy(() => import('../components/map/ClientMap'))
-
-/** Todas las columnas que cargaste para el cliente, menos las internas o ya mostradas arriba. */
-function propiedades(cliente: Cliente, ctx: SchemaContext): [string, string][] {
-  const c = ctx.tables.clientes.columns
-  const usadas = new Set(
-    [c.id, c.nombre, c.direccion, c.latitud, c.longitud, c.ubicacion, c.asignadoA, c.visitado, c.codigo].filter(Boolean),
-  )
-  const ocultas = new Set(PROPIEDADES_OCULTAS.map((p) => p.toLowerCase()))
-  return Object.entries(cliente.raw)
-    .filter(([key]) => !usadas.has(key) && !ocultas.has(key.toLowerCase()))
-    .filter(([, value]) => value !== null && value !== undefined && value !== '')
-    .map(([key, value]) => [humanize(key), formatValue(value)])
-}
 
 function DetailSkeleton() {
   return (
@@ -52,9 +36,7 @@ export function ClienteDetallePage() {
   const { clientes, ctx, isPending, error, refetch } = useClientes()
   const cliente = clientes?.find((c) => c.key === id)
   const gate = useVisitGate(cliente)
-  const { start, checking } = useStartVisit(cliente)
   const draft = cliente ? loadDraft(user.id, cliente.key) : null
-  const props = useMemo(() => (cliente && ctx ? propiedades(cliente, ctx) : []), [cliente, ctx])
 
   if (error) {
     return (
@@ -91,13 +73,10 @@ export function ClienteDetallePage() {
     )
   }
 
-  const iniciar = async () => {
-    if (!draft) {
-      const inicio = await start()
-      if (!inicio) return
-      saveDraft(user.id, cliente.key, inicio)
-    }
-    navigate(`/clientes/${encodeURIComponent(cliente.key)}/visita`)
+  const abrirVisita = () => navigate(`/clientes/${encodeURIComponent(cliente.key)}/visita`)
+  const iniciar = (inicio: VisitStart) => {
+    saveDraft(user.id, cliente.key, inicio)
+    abrirVisita()
   }
 
   return (
@@ -178,29 +157,15 @@ export function ClienteDetallePage() {
         {/* Validación de distancia */}
         {!cliente.visitado && !draft && <VisitGateCard gate={gate} />}
 
-        {/* Propiedades */}
-        {props.length > 0 && (
-          <section className="space-y-2">
-            <SectionTitle>Información del cliente</SectionTitle>
-            <Card>
-              <dl className="divide-y divide-line">
-                {props.map(([label, value]) => (
-                  <div key={label} className="flex items-start justify-between gap-4 px-4 py-3">
-                    <dt className="text-sm text-muted">{label}</dt>
-                    <dd className="min-w-0 text-right text-sm font-medium break-words">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </Card>
-          </section>
-        )}
+        {/* Información del cliente (solo los datos configurados) */}
+        {ctx && <ClienteInfo cliente={cliente} ctx={ctx} />}
       </div>
 
       {/* Acción principal */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-card/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:left-64">
         <div className="mx-auto max-w-3xl">
           {draft ? (
-            <Button size="lg" className="w-full" onClick={iniciar} icon={<ClipboardList className="size-5" />}>
+            <Button size="lg" className="w-full" onClick={abrirVisita} icon={<ClipboardList className="size-5" />}>
               Continuar visita
             </Button>
           ) : cliente.visitado ? (
@@ -208,16 +173,7 @@ export function ClienteDetallePage() {
               Visita finalizada
             </Button>
           ) : (
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={iniciar}
-              loading={checking}
-              disabled={gate.kind !== 'ok'}
-              icon={<Play className="size-5 fill-current" />}
-            >
-              {checking ? 'Confirmando ubicación…' : gate.kind === 'ok' ? 'Iniciar visita' : 'Acércate para iniciar la visita'}
-            </Button>
+            <StartVisitButton cliente={cliente} onStart={iniciar} />
           )}
         </div>
       </div>

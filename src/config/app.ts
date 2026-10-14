@@ -11,7 +11,7 @@ export const SUPABASE_URL: string = env.VITE_SUPABASE_URL ?? ''
 export const SUPABASE_KEY: string =
   env.VITE_SUPABASE_ANON_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ''
 
-/** Distancia máxima (metros) entre el promotor y el cliente para poder iniciar la visita. */
+/** Metros para considerar que el promotor está en el punto de venta (más lejos: se le avisa y queda registrado). */
 export const RADIO_VISITA_M = numberFromEnv(env.VITE_RADIO_VISITA_M, 100)
 
 /** Estilo del mapa. OpenFreeMap es gratuito, sin API key ni límites de uso. */

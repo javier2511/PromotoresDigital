@@ -1,4 +1,4 @@
-import { CircleCheck, LocateFixed, LocateOff, MapPinOff, Navigation, SatelliteDish } from 'lucide-react'
+import { CircleCheck, LocateFixed, LocateOff, MapPinOff, Navigation, Play, SatelliteDish } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { RADIO_VISITA_M } from '../config/app'
@@ -8,6 +8,7 @@ import { distanceMeters, formatDistance } from '../lib/geo'
 import { useGeo, type GeoPosition } from '../providers/GeoProvider'
 import { Button } from './ui/Button'
 import { cn } from './ui/cn'
+import { ConfirmDialog } from './ui/Dialog'
 import { Spinner } from './ui/Spinner'
 
 export type GateState =
@@ -19,7 +20,7 @@ export type GateState =
   | { kind: 'unavailable' }
   | { kind: 'far' | 'ok'; distance: number; position: GeoPosition }
 
-/** ¿Puede el promotor iniciar la visita? Compara su ubicación actual con la del cliente. */
+/** Distancia entre el promotor y el cliente ('ok' = dentro del radio del punto de venta). */
 export function useVisitGate(cliente: Cliente | undefined): GateState {
   const { status, position } = useGeo()
   if (!cliente?.location) return { kind: 'no-coords' }
@@ -41,54 +42,81 @@ export interface VisitStart {
 }
 
 /**
- * Al tocar "Iniciar visita" se pide una lectura de GPS nueva (no la última mostrada, que puede ser vieja)
- * y se vuelve a medir la distancia. Devuelve los datos de inicio, o null si no está en el punto de venta.
+ * Botón "Iniciar visita". La visita se puede iniciar desde cualquier lugar, pero siempre con la ubicación:
+ * se toma una lectura de GPS reciente, se mide la distancia al cliente y, si está lejos, se le dice al
+ * promotor a cuánto está y se le pide confirmar. La ubicación y la distancia quedan guardadas en la visita.
  */
-export function useStartVisit(cliente: Cliente | undefined) {
+export function StartVisitButton({
+  cliente,
+  onStart,
+  className,
+}: {
+  cliente: Cliente
+  onStart: (inicio: VisitStart) => void
+  className?: string
+}) {
   const { getFresh } = useGeo()
   const [checking, setChecking] = useState(false)
+  const [lejos, setLejos] = useState<VisitStart | null>(null)
 
-  const start = async (): Promise<VisitStart | null> => {
-    if (!cliente?.location) return null
+  const iniciar = async () => {
     setChecking(true)
     try {
       const position = await getFresh()
-      const distance = distanceMeters(position, cliente.location)
-      if (distance > RADIO_VISITA_M) {
-        toast.warning(
-          `Estás a ${formatDistance(distance)} del cliente. Acércate a menos de ${formatDistance(RADIO_VISITA_M)} para iniciar.`,
-        )
-        return null
-      }
-      return {
+      const distance = cliente.location ? distanceMeters(position, cliente.location) : null
+      const inicio: VisitStart = {
         startedAt: Date.now(),
         answers: {},
         position: { lat: position.lat, lng: position.lng, accuracy: position.accuracy, distance },
       }
+      if (distance !== null && distance > RADIO_VISITA_M) setLejos(inicio)
+      else onStart(inicio)
     } catch (error) {
       const code = (error as GeolocationPositionError | null)?.code
       toast.error(
         code === 1
-          ? 'Permite el acceso a tu ubicación para iniciar la visita.'
-          : 'No se pudo confirmar tu ubicación. Revisa que el GPS esté encendido e inténtalo de nuevo.',
+          ? 'Permite el acceso a tu ubicación para iniciar la visita: se registra dónde la haces.'
+          : 'No se pudo obtener tu ubicación. Revisa que el GPS esté encendido e inténtalo de nuevo.',
       )
-      return null
     } finally {
       setChecking(false)
     }
   }
 
-  return { start, checking }
+  return (
+    <>
+      <Button
+        size="lg"
+        className={cn('w-full', className)}
+        onClick={iniciar}
+        loading={checking}
+        icon={<Play className="size-5 fill-current" />}
+      >
+        {checking ? 'Obteniendo tu ubicación…' : 'Iniciar visita'}
+      </Button>
+      <ConfirmDialog
+        open={lejos !== null}
+        title={`Estás a ${formatDistance(lejos?.position.distance)} del cliente`}
+        confirmLabel="Iniciar de todos modos"
+        onCancel={() => setLejos(null)}
+        onConfirm={() => {
+          const inicio = lejos
+          setLejos(null)
+          if (inicio) onStart({ ...inicio, startedAt: Date.now() })
+        }}
+      >
+        Puedes hacer la visita desde aquí, pero quedarán registradas tu ubicación y la distancia al cliente.
+      </ConfirmDialog>
+    </>
+  )
 }
 
-/** Tarjeta que explica si la visita está desbloqueada y por qué. */
+/** Tarjeta que le dice al promotor a qué distancia está del cliente. */
 export function VisitGateCard({ gate, className }: { gate: GateState; className?: string }) {
   const { request } = useGeo()
 
   if (gate.kind === 'ok' || gate.kind === 'far') {
     const ok = gate.kind === 'ok'
-    // Qué tan cerca está, de 0 (≥ 10 veces el radio) a 1 (dentro del radio), para la barra.
-    const closeness = ok ? 1 : Math.max(0.04, 1 - Math.log10(gate.distance / RADIO_VISITA_M))
     const weakGps = gate.position.accuracy > RADIO_VISITA_M
     return (
       <div
@@ -110,11 +138,13 @@ export function VisitGateCard({ gate, className }: { gate: GateState; className?
             {ok ? <CircleCheck className="size-6" /> : <Navigation className="size-5" />}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold">{ok ? 'Estás en el punto de venta' : 'Aún estás lejos'}</p>
+            <p className="font-semibold">
+              {ok ? 'Estás en el punto de venta' : `Estás a ${formatDistance(gate.distance)} del cliente`}
+            </p>
             <p className="text-sm text-muted">
               {ok
-                ? `A ${formatDistance(gate.distance)} del cliente. Ya puedes iniciar la visita.`
-                : `Acércate a menos de ${formatDistance(RADIO_VISITA_M)} para iniciar la visita.`}
+                ? `A ${formatDistance(gate.distance)} del cliente.`
+                : 'Puedes iniciar la visita; la distancia quedará registrada.'}
             </p>
           </div>
           <div className="text-right">
@@ -129,14 +159,6 @@ export function VisitGateCard({ gate, className }: { gate: GateState; className?
             <p className="text-[11px] text-muted">±{Math.round(gate.position.accuracy)} m</p>
           </div>
         </div>
-        {!ok && (
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-amber-500/15">
-            <div
-              className="h-full rounded-full bg-amber-500 transition-[width] duration-700"
-              style={{ width: `${Math.min(100, closeness * 100)}%` }}
-            />
-          </div>
-        )}
         {weakGps && (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
             <SatelliteDish className="size-3.5" />
@@ -150,8 +172,8 @@ export function VisitGateCard({ gate, className }: { gate: GateState; className?
   const info = {
     'no-coords': {
       icon: MapPinOff,
-      title: 'Cliente sin ubicación',
-      text: 'Este cliente no tiene coordenadas registradas, así que no se puede validar la distancia. Avísale a tu administrador.',
+      title: 'Cliente sin ubicación registrada',
+      text: 'Puedes iniciar la visita; se guardará tu ubicación, pero no se puede calcular la distancia.',
     },
     unsupported: {
       icon: MapPinOff,
@@ -161,12 +183,12 @@ export function VisitGateCard({ gate, className }: { gate: GateState; className?
     prompt: {
       icon: LocateFixed,
       title: 'Activa tu ubicación',
-      text: 'La necesitamos para validar que estás en el punto de venta.',
+      text: 'Se usa para registrar dónde haces la visita y a qué distancia del cliente.',
     },
     denied: {
       icon: LocateOff,
       title: 'Ubicación bloqueada',
-      text: 'Permite el acceso a la ubicación para este sitio en la configuración del navegador y recarga la página.',
+      text: 'Para iniciar visitas, permite el acceso a la ubicación para este sitio en la configuración del navegador y recarga la página.',
     },
     unavailable: {
       icon: SatelliteDish,

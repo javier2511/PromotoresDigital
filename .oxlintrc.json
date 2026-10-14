@@ -7,7 +7,7 @@
       "warn",
       {
         "allowConstantExport": true,
-        "allowExportNames": ["useAuth", "useUser", "useGeo", "buttonClass", "useVisitGate", "useStartVisit"]
+        "allowExportNames": ["useAuth", "useUser", "useGeo", "buttonClass", "useVisitGate", "useInfoCliente"]
       }
     ]
   }

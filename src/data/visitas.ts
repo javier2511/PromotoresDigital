@@ -10,7 +10,8 @@ export interface PosicionVisita {
   lat: number
   lng: number
   accuracy: number
-  distance: number
+  /** Metros al cliente al iniciar la visita (null si el cliente no tiene coordenadas). */
+  distance: number | null
 }
 
 export interface FinalizarVisitaInput {
@@ -120,7 +121,7 @@ async function insertVisita(input: FinalizarVisitaInput): Promise<Id | null> {
     put(row, c.latitud, position.lat)
     put(row, c.longitud, position.lng)
     if (!c.latitud || !c.longitud) put(row, c.ubicacion, `${position.lat},${position.lng}`)
-    put(row, c.distancia, Math.round(position.distance))
+    if (position.distance !== null) put(row, c.distancia, Math.round(position.distance))
     put(row, c.precision, Math.round(position.accuracy))
   }
   put(row, c.estado, VALOR_ESTADO_VISITA)

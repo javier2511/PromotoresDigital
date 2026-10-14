@@ -11,6 +11,7 @@ import { cn } from '../components/ui/cn'
 import { Skeleton } from '../components/ui/Skeleton'
 import { schema, type Schema } from '../config/schema'
 import { queryKeys, useClientes, useFormulario, useSchema } from '../data/hooks'
+import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
 import { clearSchemaCache, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
 import { useUser } from '../providers/AuthProvider'
 
@@ -140,6 +141,47 @@ function TableCard({ k, t }: { k: keyof Schema; t: ResolvedTable }) {
   )
 }
 
+/** Qué columna se usa para cada dato de la ficha del cliente (INFO_CLIENTE). */
+function InfoClienteCard({ columnas, internas }: { columnas: string[] | null; internas: string[] }) {
+  if (!columnas) return null
+  const campos = resolverInfoCliente(columnas, internas)
+  const encontrados = campos.filter((c) => c.columna).length
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center gap-3 border-b border-line p-4">
+        <div
+          className={cn(
+            'grid size-9 place-items-center rounded-xl',
+            encontrados === campos.length ? 'bg-emerald-500/12 text-emerald-600' : 'bg-amber-500/15 text-amber-600',
+          )}
+        >
+          {encontrados === campos.length ? <CircleCheck className="size-5" /> : <TriangleAlert className="size-5" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Información del cliente</p>
+          <p className="text-sm text-muted">
+            {encontrados} de {campos.length} datos encontrados (se configuran en INFO_CLIENTE)
+          </p>
+        </div>
+      </div>
+      <dl className="divide-y divide-line text-sm">
+        {campos.map((c) => (
+          <div key={c.etiqueta} className="flex items-center justify-between gap-3 px-4 py-2">
+            <dt className="text-muted">{c.etiqueta}</dt>
+            <dd>
+              {c.columna ? (
+                <code className="rounded bg-soft px-1.5 py-0.5 font-mono text-[13px]">{c.columna}</code>
+              ) : (
+                <span className="font-semibold text-amber-700 dark:text-amber-300">No encontrada</span>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  )
+}
+
 export function DiagnosticoPage() {
   const user = useUser()
   const queryClient = useQueryClient()
@@ -239,6 +281,10 @@ export function DiagnosticoPage() {
                 <strong className="text-fg">{formulario?.rules.length ?? '…'}</strong>
               </p>
             </Card>
+            <InfoClienteCard
+              columnas={ctx.tables.clientes.allColumns ?? (clientes?.[0] ? Object.keys(clientes[0].raw) : null)}
+              internas={columnasInternas(ctx)}
+            />
             {(Object.keys(ctx.tables) as (keyof Schema)[]).map((k) => (
               <TableCard key={k} k={k} t={ctx.tables[k] as ResolvedTable} />
             ))}

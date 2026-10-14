@@ -4,7 +4,7 @@ import type { Answers } from './questions'
 export interface VisitDraft {
   startedAt: number
   answers: Answers
-  position: { lat: number; lng: number; accuracy: number; distance: number } | null
+  position: { lat: number; lng: number; accuracy: number; distance: number | null } | null
   /** La fila de la visita ya se insertó (falló un paso posterior): al reintentar se reutiliza, no se duplica. */
   visita?: { id: string | number | null }
   updatedAt: number

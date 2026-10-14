@@ -11,7 +11,7 @@ export function SetupScreen() {
           Agrega estas variables de entorno en tu proyecto de Vercel (Settings → Environment Variables) o en un archivo{' '}
           <code className="rounded bg-soft px-1 font-mono">.env.local</code> y vuelve a desplegar:
         </p>
-        <pre className="mt-4 overflow-x-auto rounded-xl bg-slate-900 p-4 text-[13px] leading-relaxed text-slate-100">
+        <pre className="mt-4 overflow-x-auto rounded-xl bg-zinc-900 p-4 text-[13px] leading-relaxed text-zinc-100">
           {`VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
 VITE_SUPABASE_ANON_KEY=tu-anon-key`}
         </pre>

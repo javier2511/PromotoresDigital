@@ -327,17 +327,35 @@ export const VALOR_VISITADO_TEXTO = 'visitado'
 export const VALOR_ESTADO_VISITA = 'finalizada'
 
 /**
- * Columnas de clientes que NO se muestran en la ficha del cliente.
- * Todo lo demás que cargues en la tabla aparece automáticamente como "propiedad".
+ * INFORMACIÓN DEL CLIENTE (ficha del cliente)
+ * Solo se muestran estos datos, en este orden. Para cada uno se busca la columna de tu tabla de clientes:
+ *  - `columnas`: nombres exactos posibles.
+ *  - `palabras`: si no hay nombre exacto, una columna cuyo nombre contenga TODAS las palabras de algún grupo.
+ * En ambos casos no importan mayúsculas, acentos, espacios ni guiones bajos ("Status_cuponera" = "status cuponera").
+ * `tipo`: 'destacado' (número grande), 'metrica' (mosaico de "últimos 3 meses") o 'dato' (fila).
  */
-export const PROPIEDADES_OCULTAS = [
-  'id',
-  'uuid',
-  'created_at',
-  'updated_at',
-  'inserted_at',
-  'modified_at',
+export interface CampoInfoCliente {
+  etiqueta: string
+  tipo: 'destacado' | 'metrica' | 'dato'
+  columnas?: string[]
+  palabras?: string[][]
+}
+
+export const INFO_CLIENTE: CampoInfoCliente[] = [
+  { etiqueta: 'Saldo aprox. en puntos', tipo: 'destacado', palabras: [['saldo']] },
+  { etiqueta: 'Status autogestión', tipo: 'dato', palabras: [['autogestion']] },
+  { etiqueta: 'Inscrito en Premia', tipo: 'dato', palabras: [['premia']] },
+  { etiqueta: 'Cuponera', tipo: 'dato', columnas: ['cuponera'], palabras: [['cuponera']] },
+  { etiqueta: 'Status cuponera', tipo: 'dato', palabras: [['status', 'cuponera'], ['estatus', 'cuponera']] },
+  { etiqueta: 'Canal', tipo: 'dato', columnas: ['canal', 'canal_venta', 'canal_de_venta'], palabras: [['canal']] },
+  { etiqueta: 'Canjes', tipo: 'metrica', palabras: [['canje']] },
+  { etiqueta: 'Promos', tipo: 'metrica', palabras: [['promos'], ['promociones'], ['promo', 'mes']] },
+  { etiqueta: 'Lotería', tipo: 'metrica', palabras: [['loteria']] },
+  { etiqueta: 'Retos', tipo: 'metrica', palabras: [['retos'], ['reto', 'mes']] },
 ]
 
-/** Etiquetas bonitas para columnas (opcional). Ej.: { canal_venta: 'Canal' } */
+/** Título del grupo de datos tipo 'metrica'. */
+export const TITULO_METRICAS = 'Últimos 3 meses'
+
+/** Etiquetas bonitas para columnas en Resultados (opcional). Ej.: { ventas_mes: 'Ventas del mes' } */
 export const ETIQUETAS: Record<string, string> = {}

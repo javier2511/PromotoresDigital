@@ -13,8 +13,8 @@ Reemplaza la versión de FlutterFlow **usando la misma base de datos de Supabase
 | **Inicio de sesión** | Correo y contraseña de Supabase Auth, con recuperación de contraseña por correo. |
 | **Clientes** | Avance (visitados / asignados), búsqueda, filtros Pendientes · Visitados · Todos, orden por cercanía, distancia a cada cliente y "más cercano" destacado. Al finalizar una visita el cliente sale de Pendientes. |
 | **Mapa** | Pines por estado (rojo pendiente, verde visitado), agrupación cuando hay muchos, punto azul con círculo de precisión y orientación, botón "Mi ubicación", tarjeta del cliente con *Ver detalle* y *Cómo llegar*. En computadora, lista lateral + mapa. |
-| **Ficha del cliente** | Mini mapa con la distancia, botones a Google Maps, Waze y llamada, y **todas las columnas que cargues** en la tabla de clientes (aparecen solas). |
-| **Visita** | Se desbloquea solo a menos de `VITE_RADIO_VISITA_M` metros (100 por defecto). Preguntas Sí/No, opción única, múltiple, número, fecha y texto; reglas de `preguntas_reglas`; borrador guardado en el teléfono (no se pierde si se cierra la app o se va la señal). |
+| **Ficha del cliente** | Mini mapa con la distancia, botones a Google Maps, Waze y llamada, y la información que tenías en FlutterFlow: saldo de puntos, status autogestión, Premia, cuponera, canal y canjes / promos / lotería / retos de los últimos 3 meses. |
+| **Visita** | Se puede iniciar desde cualquier lugar. Al iniciarla se guarda la ubicación del promotor y su distancia al cliente; si está a más de `VITE_RADIO_VISITA_M` metros (100 por defecto) se le avisa a cuánto está y debe confirmar. Preguntas Sí/No, opción única, múltiple, número, fecha y texto; reglas de `preguntas_reglas`; borrador guardado en el teléfono (no se pierde si se cierra la app o se va la señal). |
 | **Visita finalizada** | Avance actualizado y el siguiente cliente más cercano. |
 | **Resultados** | La tabla de resultados que cargas tú, filtrada al promotor. |
 | **Perfil** | Datos del usuario, estado del GPS, "Verificar conexión" (diagnóstico de tablas y columnas) y cerrar sesión. |
@@ -38,7 +38,7 @@ FlutterFlow. Por eso cabe en los planes gratuitos.
    | --- | --- |
    | `VITE_SUPABASE_URL` | `https://swblsrhhmwxrgdyubckb.supabase.co` |
    | `VITE_SUPABASE_ANON_KEY` | Supabase → *Project Settings → API* → **anon public** (o la *publishable key*) |
-   | `VITE_RADIO_VISITA_M` | *(opcional)* metros para desbloquear la visita, p. ej. `100` |
+   | `VITE_RADIO_VISITA_M` | *(opcional)* metros para considerar que el promotor está en el punto de venta (si está más lejos se le avisa), p. ej. `100` |
 
 5. **Deploy**. Tendrás una dirección tipo `https://promotores-digital.vercel.app`.
 6. En Supabase → **Authentication → URL Configuration** pon esa dirección en *Site URL* y agrega
@@ -91,9 +91,29 @@ Al finalizar una visita la app:
    considera visitado a todo cliente que tenga una visita registrada.
 
 Si se corta la señal a mitad del guardado, las respuestas siguen en el teléfono y al reintentar se reutiliza
-la visita ya creada (no se duplica). Al tocar *Iniciar visita* la distancia se vuelve a medir con una lectura
-de GPS reciente, y si la app no logra identificar qué clientes son del usuario no muestra ninguno (nunca los
-de otros promotores).
+la visita ya creada (no se duplica). Si la app no logra identificar qué clientes son del usuario no muestra
+ninguno (nunca los de otros promotores).
+
+### Ver desde dónde se hizo cada visita
+
+Al tocar *Iniciar visita* se toma una lectura de GPS reciente del promotor y se calcula su distancia al
+cliente. Si está lejos se le dice a cuánto (p. ej. "Estás a 2.5 km del cliente") y debe confirmar; el
+formulario también se lo recuerda. En la tabla **visitas** quedan `latitud`, `longitud`, la distancia en
+metros y la precisión del GPS, para que revises desde Supabase qué tan lejos se hizo cada visita.
+
+Esos datos solo se guardan si las columnas existen. En la app ve a **Perfil → Verificar conexión → Visitas**:
+si *Latitud*, *Longitud*, *Distancia* o *Precisión GPS* dicen "—", ejecuta
+`supabase/03_columnas_distancia_visitas.sql` en el *SQL Editor* (solo agrega las que falten) y luego toca
+**Volver a detectar**. Los teléfonos de los promotores revisan la base cada hora, así que toman las columnas
+nuevas solos en menos de una hora.
+
+### Información del cliente (ficha)
+
+La ficha muestra solo los datos de la lista `INFO_CLIENTE` en `src/config/schema.ts`, en ese orden: el saldo
+de puntos destacado, los indicadores de los últimos 3 meses en mosaicos y el resto como filas. La app busca la
+columna de cada dato por su nombre sin importar mayúsculas, acentos ni guiones bajos (por ejemplo
+`Status_cuponera`). En **Verificar conexión** ves qué columna encontró para cada uno; para agregar, quitar o
+renombrar datos edita esa lista.
 
 ### Reglas de preguntas (`preguntas_reglas`)
 
@@ -133,6 +153,8 @@ npm run dev                  # http://localhost:5173
 La ubicación del navegador solo funciona en `https://` o en `localhost`.
 
 ## Tecnología
+
+El color de la marca (rojo) se cambia en `src/index.css`, en la escala `--color-brand-*` (600 es el principal).
 
 React 19 + TypeScript, Vite, Tailwind CSS, TanStack Query, Supabase JS y
 [MapLibre GL](https://maplibre.org/) con mapas de [OpenFreeMap](https://openfreemap.org/)

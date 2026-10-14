@@ -24,10 +24,10 @@ Hoy el teléfono hace tres escrituras (visita, respuestas, marcar cliente), igua
 reintenta y deshace si algo falla, pero lo más sólido es una función de Postgres (`rpc`) que:
 
 - guarde todo en **una sola transacción** (o todo o nada), y
-- **valide la distancia en el servidor** con las coordenadas del cliente. Hoy la validación ocurre en el
-  teléfono; alguien con conocimientos técnicos podría llamar la API directamente, y en Android existen
-  apps de "GPS falso". La app ya guarda distancia y precisión del GPS en cada visita para que puedas
-  auditarlas.
+- **calcule la distancia en el servidor** con las coordenadas del cliente. Hoy la calcula el teléfono y se
+  guarda con la visita (junto con la ubicación y la precisión del GPS); alguien con conocimientos técnicos
+  podría enviar otros valores llamando la API directamente, y en Android existen apps de "GPS falso".
+  Revisa de vez en cuando las visitas con distancias grandes o precisión muy baja.
 
 Si quieres este paso, comparte el resultado de `01_ver_estructura.sql` y se escribe a la medida.
 
