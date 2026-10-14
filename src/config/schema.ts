@@ -462,7 +462,7 @@ export const INFO_CLIENTE: CampoInfoCliente[] = [
     tipo: 'dato',
     palabras: [['status', 'cuponera'], ['estatus', 'cuponera'], ['cuponera', 'estado']],
   },
-  { etiqueta: 'Canal', tipo: 'dato', columnas: ['canal', 'canal_venta', 'canal_de_venta'], palabras: [['canal']] },
+  { etiqueta: 'Canal', tipo: 'dato', columnas: ['rm1', 'canal', 'canal_venta', 'canal_de_venta'], palabras: [['canal']] },
   { etiqueta: 'Canjes', tipo: 'metrica', palabras: [['canje']] },
   { etiqueta: 'Promos', tipo: 'metrica', palabras: [['promos'], ['promociones'], ['promo', 'mes']] },
   { etiqueta: 'Lotería', tipo: 'metrica', palabras: [['loteria']] },
