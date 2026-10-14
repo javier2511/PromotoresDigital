@@ -4,6 +4,7 @@ import { useClientes } from '../data/hooks'
 import { useAsegurarPerfil } from '../data/perfil'
 import { useAuth } from '../providers/AuthProvider'
 import { Logo } from './Logo'
+import { LogoutButton } from './LogoutButton'
 import { cn } from './ui/cn'
 import { ProgressRing } from './ui/ProgressRing'
 
@@ -77,6 +78,7 @@ export function AppShell() {
           <p className="truncate px-2 text-xs text-muted" title={user?.email ?? ''}>
             {user?.email}
           </p>
+          <LogoutButton variant="lateral" />
         </div>
       </aside>
 

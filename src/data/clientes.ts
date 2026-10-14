@@ -1,6 +1,7 @@
 import type { PostgrestError, User } from '@supabase/supabase-js'
 import { ESTATUS_ASIGNACION_COMPLETADA, ESTATUS_ASIGNACION_OCULTA, VALORES_VISITADO } from '../config/schema'
 import { locationFromColumns, parseLocation, type LatLng } from '../lib/geo'
+import { diasDe } from '../lib/dias'
 import { recentlyFinished } from '../lib/draft'
 import { likeExact, ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
@@ -23,6 +24,8 @@ export interface Cliente {
   codigo: string | null
   location: LatLng | null
   visitado: boolean
+  /** Días de la semana en que toca visitarlo (1 = lunes … 7 = domingo), de la columna dia_visita. */
+  dias: number[]
   /** Asignación pendiente (o la última completada) cuando los clientes se asignan por la tabla asignaciones. */
   asignacion: Asignacion | null
   /** Fila completa, para mostrar todas las propiedades que cargaste. */
@@ -101,6 +104,7 @@ function toCliente(row: Row, ctx: SchemaContext, visitedIds: Set<string> | null)
     codigo: text(c.codigo ? row[c.codigo] : null),
     location,
     visitado,
+    dias: c.diaVisita ? diasDe(row[c.diaVisita]) : [],
     asignacion: null,
     raw: row,
   }

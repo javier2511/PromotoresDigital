@@ -56,6 +56,7 @@ export type ClienteField =
   | 'visitado'
   | 'telefono'
   | 'codigo'
+  | 'diaVisita'
 
 export type PreguntaField =
   | 'id'
@@ -107,6 +108,19 @@ export type PerfilField = 'id' | 'authId' | 'email' | 'nombre'
 
 export type AsignacionField = 'id' | 'cliente' | 'usuario' | 'fecha' | 'orden' | 'estatus'
 
+export type JornadaField =
+  | 'id'
+  | 'usuario'
+  | 'fecha'
+  | 'inicio'
+  | 'fin'
+  | 'latitudInicio'
+  | 'longitudInicio'
+  | 'precisionInicio'
+  | 'latitudFin'
+  | 'longitudFin'
+  | 'precisionFin'
+
 export interface Schema {
   clientes: TableSpec<ClienteField>
   preguntas: TableSpec<PreguntaField>
@@ -116,6 +130,7 @@ export interface Schema {
   resultados: TableSpec<ResultadoField>
   perfiles: TableSpec<PerfilField>
   asignaciones: TableSpec<AsignacionField>
+  jornadas: TableSpec<JornadaField>
 }
 
 export const schema: Schema = {
@@ -164,6 +179,8 @@ export const schema: Schema = {
         'no_cliente',
         'sap',
       ],
+      // Día(s) de la semana en que toca visitarlo (filtro por día en la lista): "Martes", "Lun, Jue", "2"…
+      diaVisita: ['dia_visita', 'dias_visita', 'dia_de_visita', 'dia_ruta', 'dia'],
     },
     required: ['id', 'nombre'],
   },
@@ -364,6 +381,28 @@ export const schema: Schema = {
       estatus: ['estatus', 'estado', 'status'],
     },
     required: ['cliente', 'usuario'],
+  },
+
+  /**
+   * Opcional: inicio y fin de la jornada de cada promotor (se crea con supabase/06_jornadas.sql).
+   * Si no existe, la tarjeta "Jornada de hoy" no aparece.
+   */
+  jornadas: {
+    table: ['jornadas', 'jornada', 'jornadas_promotor', 'asistencias'],
+    fields: {
+      id: ['id_jornada', 'jornada_id', 'id'],
+      usuario: COLUMNAS_USUARIO,
+      fecha: ['fecha', 'fecha_jornada', 'dia'],
+      inicio: ['hora_inicio', 'inicio', 'hora_checkin', 'checkin', 'fecha_inicio'],
+      fin: ['hora_fin', 'fin', 'hora_checkout', 'checkout', 'fecha_fin'],
+      latitudInicio: ['latitud_inicio', 'lat_inicio', 'latitud_checkin'],
+      longitudInicio: ['longitud_inicio', 'lng_inicio', 'lon_inicio', 'longitud_checkin'],
+      precisionInicio: ['precision_inicio_m', 'precision_inicio'],
+      latitudFin: ['latitud_fin', 'lat_fin', 'latitud_checkout'],
+      longitudFin: ['longitud_fin', 'lng_fin', 'lon_fin', 'longitud_checkout'],
+      precisionFin: ['precision_fin_m', 'precision_fin'],
+    },
+    required: ['usuario', 'inicio'],
   },
 }
 

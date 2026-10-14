@@ -64,7 +64,7 @@ export function resolverInfoCliente(
 /** Columnas que la app ya usa para otra cosa (id, nombre, ubicación, usuario…) y nunca se muestran como dato. */
 export function columnasInternas(ctx: Pick<SchemaContext, 'tables'>): string[] {
   const c = ctx.tables.clientes.columns
-  return [c.id, c.nombre, c.direccion, c.latitud, c.longitud, c.ubicacion, c.asignadoA, c.visitado].filter(
+  return [c.id, c.nombre, c.direccion, c.latitud, c.longitud, c.ubicacion, c.asignadoA, c.visitado, c.diaVisita].filter(
     (x): x is string => Boolean(x),
   )
 }

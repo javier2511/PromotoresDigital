@@ -11,13 +11,13 @@ Reemplaza la versión de FlutterFlow **usando la misma base de datos de Supabase
 | Pantalla | Detalle |
 | --- | --- |
 | **Inicio de sesión** | Correo y contraseña de Supabase Auth. **Crear cuenta** desde la misma pantalla (nombre, correo y contraseña); la cuenta nueva aparece en tu tabla de usuarios y tú le asignas clientes. |
-| **Clientes** | Avance (visitados / asignados), búsqueda, filtros Pendientes · Visitados · Todos, orden por cercanía, distancia a cada cliente y "más cercano" destacado. Al finalizar una visita el cliente sale de Pendientes. |
+| **Clientes** | Avance (visitados / asignados), **jornada de hoy** (iniciar / terminar), búsqueda, filtros Pendientes · Visitados · Todos, **filtro por día de visita** (columna `dia_visita`), orden por cercanía, distancia a cada cliente y "más cercano" destacado. Al finalizar una visita el cliente sale de Pendientes. |
 | **Mapa** | Pines por estado (rojo pendiente, verde visitado), agrupación cuando hay muchos, punto azul con círculo de precisión y orientación, botón "Mi ubicación", tarjeta del cliente con *Ver detalle* y *Cómo llegar*. En computadora, lista lateral + mapa. |
 | **Ficha del cliente** | Mini mapa con la distancia, botones a Google Maps, Waze y llamada, y la información que tenías en FlutterFlow: saldo de puntos, status autogestión, Premia, cuponera, canal y canjes / promos / lotería / retos de los últimos 3 meses. |
 | **Visita** | Se puede iniciar desde cualquier lugar. Al iniciarla se guarda la ubicación del promotor y su distancia al cliente; si está a más de `VITE_RADIO_VISITA_M` metros (100 por defecto) se le avisa a cuánto está y debe confirmar. Preguntas Sí/No, opción única, múltiple, número, fecha y texto; reglas de `preguntas_reglas`; borrador guardado en el teléfono (no se pierde si se cierra la app o se va la señal). |
 | **Visita finalizada** | Avance actualizado y el siguiente cliente más cercano. |
 | **Resultados** | La tabla de resultados que cargas tú, filtrada al promotor. |
-| **Perfil** | Datos del usuario, estado del GPS, "Verificar conexión" (diagnóstico de tablas y columnas) y cerrar sesión. |
+| **Perfil** | Datos del usuario, estado del GPS, "Verificar conexión" (diagnóstico de tablas y columnas) y cerrar sesión (también en el encabezado de Clientes y, en computadora, en la barra lateral). |
 
 También funciona en modo oscuro, en computadora y se puede **instalar en el teléfono** como app
 (Chrome/Safari → *Agregar a pantalla de inicio*).
@@ -150,6 +150,21 @@ si *Latitud*, *Longitud*, *Distancia* o *Precisión GPS* dicen "—", ejecuta
 `supabase/03_columnas_distancia_visitas.sql` en el *SQL Editor* (solo agrega las que falten) y luego toca
 **Volver a detectar**. Los teléfonos de los promotores revisan la base cada hora, así que toman las columnas
 nuevas solos en menos de una hora.
+
+### Filtro por día de visita
+
+Si la tabla de clientes tiene la columna `dia_visita`, la lista y el mapa muestran botones *Todos los días · Lun ·
+Mar · Mié…* con cuántos clientes hay cada día (el de hoy lleva un punto). Entiende "Martes", "MARTES", "Mar",
+números (1 = lunes … 7 = domingo) y varios días en la misma celda ("Lunes, Jueves", "L/J"). El día elegido se
+recuerda en el teléfono y vale para la lista y el mapa; el avance de arriba siempre cuenta todos los clientes.
+
+### Jornada del promotor (inicio y fin del día)
+
+En **Clientes** aparece la tarjeta **Jornada de hoy**: *Iniciar jornada* guarda la hora y la ubicación (GPS) en que
+empieza a trabajar y *Terminar* guarda la hora y ubicación de salida; mientras tanto muestra cuánto lleva. Se
+guarda en la tabla `jornadas`, que se crea con `supabase/06_jornadas.sql` (cada promotor solo puede ver y registrar
+las suyas). Mientras esa tabla no exista, la tarjeta no aparece. Al final del script hay una consulta para ver las
+jornadas de todos con su duración.
 
 ### Información del cliente (ficha)
 

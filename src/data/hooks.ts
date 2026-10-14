@@ -13,6 +13,7 @@ export const queryKeys = {
   clientes: (userId: string) => ['clientes', userId] as const,
   formulario: (userId: string) => ['formulario', userId] as const,
   resultados: (userId: string) => ['resultados', userId] as const,
+  jornada: (userId: string) => ['jornada', userId] as const,
 }
 
 export function useSchema() {

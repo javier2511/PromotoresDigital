@@ -1,9 +1,12 @@
-import { ArrowDownAZ, Navigation, PartyPopper, RefreshCw, Search, Store, X } from 'lucide-react'
+import { ArrowDownAZ, CalendarDays, Navigation, PartyPopper, RefreshCw, Search, Store, X } from 'lucide-react'
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { ClienteCard } from '../components/ClienteCard'
 import { ErrorState } from '../components/ErrorState'
+import { FiltroDias } from '../components/FiltroDias'
+import { JornadaCard } from '../components/JornadaCard'
 import { LocationBanner } from '../components/LocationBanner'
+import { LogoutButton } from '../components/LogoutButton'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ProgressRing } from '../components/ui/ProgressRing'
@@ -11,6 +14,8 @@ import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Skeleton } from '../components/ui/Skeleton'
 import { RADIO_VISITA_M } from '../config/app'
 import { useClientes, useSchema, type ClienteConDistancia, type Progreso } from '../data/hooks'
+import { DIAS } from '../lib/dias'
+import { filtrarPorDia, useFiltroDia } from '../lib/filtro-dia'
 import { draftClienteKeys } from '../lib/draft'
 import { normalize } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
@@ -104,11 +109,17 @@ export function ClientesPage() {
     )
 
   const enCurso = useMemo(() => draftClienteKeys(user.id), [user.id])
+  const [dia, setDia] = useFiltroDia()
+  const delDia = useMemo(() => filtrarPorDia(clientes ?? [], dia), [clientes, dia])
+  const conteos = useMemo(() => {
+    const visitados = delDia.filter((c) => c.visitado).length
+    return { pendientes: delDia.length - visitados, visitados, todos: delDia.length }
+  }, [delDia])
+  const nombreDia = dia ? DIAS[dia - 1].largo.toLowerCase() : null
 
   const lista = useMemo(() => {
-    if (!clientes) return []
     const term = normalize(q)
-    const filtered = clientes.filter((c) => {
+    const filtered = delDia.filter((c) => {
       if (filtro === 'pendientes' && c.visitado) return false
       if (filtro === 'visitados' && !c.visitado) return false
       if (!term) return true
@@ -124,7 +135,7 @@ export function ClientesPage() {
       }
       return byName(a, b)
     })
-  }, [clientes, filtro, q, orden])
+  }, [delDia, filtro, q, orden])
 
   const nombre =
     ctx?.perfil?.nombre?.split(' ')[0] ??
@@ -132,7 +143,7 @@ export function ClientesPage() {
     user.email?.split('@')[0].split(/[._-]/)[0]
 
   const masCercanoKey =
-    orden === 'cercania' && filtro !== 'visitados' && !q
+    orden === 'cercania' && filtro !== 'visitados' && !q && !dia
       ? lista.find((c) => !c.visitado && c.distance !== null)?.key
       : undefined
 
@@ -150,14 +161,17 @@ export function ClientesPage() {
             </h1>
             <p className="mt-1 text-sm text-white/80">{fechaHoy()}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            aria-label="Actualizar"
-            className="grid size-10 shrink-0 place-items-center rounded-full text-white/90 transition hover:bg-white/15"
-          >
-            <RefreshCw className={cn('size-5', isFetching && 'animate-spin')} />
-          </button>
+          <div className="flex shrink-0 items-center">
+            <button
+              type="button"
+              onClick={() => refetch()}
+              aria-label="Actualizar"
+              className="grid size-10 shrink-0 place-items-center rounded-full text-white/90 transition hover:bg-white/15"
+            >
+              <RefreshCw className={cn('size-5', isFetching && 'animate-spin')} />
+            </button>
+            <LogoutButton variant="icono" className="lg:hidden" />
+          </div>
         </div>
       </header>
 
@@ -170,6 +184,7 @@ export function ClientesPage() {
           ) : (
             <div className="h-12" />
           )}
+          <JornadaCard />
           <LocationBanner />
         </div>
 
@@ -208,11 +223,20 @@ export function ClientesPage() {
             value={filtro}
             onChange={(v) => setParam('f', v === 'pendientes' ? null : v)}
             options={[
-              { value: 'pendientes', label: 'Pendientes', count: progreso?.pendientes },
-              { value: 'visitados', label: 'Visitados', count: progreso?.visitados },
-              { value: 'todos', label: 'Todos', count: progreso?.total },
+              { value: 'pendientes', label: 'Pendientes', count: clientes ? conteos.pendientes : undefined },
+              { value: 'visitados', label: 'Visitados', count: clientes ? conteos.visitados : undefined },
+              { value: 'todos', label: 'Todos', count: clientes ? conteos.todos : undefined },
             ]}
           />
+          {clientes && (
+            <FiltroDias
+              clientes={clientes}
+              conteoDe={(clientes ?? []).filter((c) => (filtro === 'pendientes' ? !c.visitado : filtro === 'visitados' ? c.visitado : true))}
+              dia={dia}
+              onChange={setDia}
+              className="-mx-4 px-4 sm:-mx-6 sm:px-6"
+            />
+          )}
         </div>
 
         <div className="pb-6">
@@ -228,6 +252,22 @@ export function ClientesPage() {
             q ? (
               <EmptyState icon={Search} title="Sin resultados">
                 No encontramos clientes que coincidan con “{q}”.
+              </EmptyState>
+            ) : nombreDia ? (
+              <EmptyState
+                icon={CalendarDays}
+                tone={filtro === 'pendientes' && delDia.length > 0 ? 'success' : undefined}
+                title={
+                  delDia.length === 0
+                    ? `No tienes clientes para el ${nombreDia}`
+                    : filtro === 'pendientes'
+                      ? `¡Terminaste los clientes del ${nombreDia}!`
+                      : `Sin visitas del ${nombreDia} todavía`
+                }
+              >
+                <button type="button" onClick={() => setDia(null)} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">
+                  Ver todos los días
+                </button>
               </EmptyState>
             ) : filtro === 'pendientes' ? (
               <EmptyState icon={PartyPopper} tone="success" title="¡Terminaste!">

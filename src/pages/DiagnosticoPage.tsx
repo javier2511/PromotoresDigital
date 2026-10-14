@@ -27,6 +27,7 @@ const TITULOS: Record<keyof Schema, string> = {
   resultados: 'Resultados',
   perfiles: 'Usuarios (opcional)',
   asignaciones: 'Asignaciones (opcional)',
+  jornadas: 'Jornadas (opcional)',
 }
 
 const CAMPOS: Record<string, string> = {
@@ -61,6 +62,7 @@ const CAMPOS: Record<string, string> = {
   estado: 'Estado',
   duracion: 'Duración',
   realizada: 'Visita realizada',
+  diaVisita: 'Día de visita',
   asignacion: 'Asignación',
   finHora: 'Hora de fin',
   checkin: 'Check-in realizado',
@@ -69,6 +71,12 @@ const CAMPOS: Record<string, string> = {
   longitudCheckin: 'Longitud check-in',
   ubicacionCheckin: 'Ubicación check-in',
   estatus: 'Estatus',
+  latitudInicio: 'Latitud al iniciar',
+  longitudInicio: 'Longitud al iniciar',
+  precisionInicio: 'Precisión al iniciar',
+  latitudFin: 'Latitud al terminar',
+  longitudFin: 'Longitud al terminar',
+  precisionFin: 'Precisión al terminar',
   visita: 'Visita',
   preguntaTexto: 'Texto de la pregunta',
   respuesta: 'Respuesta',

@@ -1,17 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Database, LocateFixed, LogOut, Radar, RefreshCw } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { ChevronRight, Database, LocateFixed, Radar, RefreshCw } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
+import { LogoutButton } from '../components/LogoutButton'
 import { PageTitle } from '../components/PageHeader'
 import { Card, SectionTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { ConfirmDialog } from '../components/ui/Dialog'
 import { APP_NAME, APP_VERSION, RADIO_VISITA_M } from '../config/app'
 import { useClientes, useSchema } from '../data/hooks'
 import { formatDistance } from '../lib/geo'
 import { initials } from '../lib/text'
-import { useAuth, useUser } from '../providers/AuthProvider'
+import { useUser } from '../providers/AuthProvider'
 import { useGeo } from '../providers/GeoProvider'
 
 function Row({ icon, title, detail, action }: { icon: ReactNode; title: string; detail?: ReactNode; action?: ReactNode }) {
@@ -29,12 +29,10 @@ function Row({ icon, title, detail, action }: { icon: ReactNode; title: string; 
 
 export function PerfilPage() {
   const user = useUser()
-  const { signOut } = useAuth()
   const { data: ctx } = useSchema()
   const { progreso } = useClientes()
   const { status, position, request } = useGeo()
   const queryClient = useQueryClient()
-  const [confirm, setConfirm] = useState(false)
 
   const nombre = ctx?.perfil?.nombre ?? (user.user_metadata?.full_name as string | undefined) ?? user.email?.split('@')[0] ?? ''
 
@@ -113,27 +111,12 @@ export function PerfilPage() {
         </Link>
       </Card>
 
-      <Button variant="outline" size="lg" className="mt-6 w-full text-red-600" onClick={() => setConfirm(true)} icon={<LogOut className="size-5" />}>
-        Cerrar sesión
-      </Button>
+      <LogoutButton className="mt-6" />
 
       <p className="mt-6 text-center text-xs text-muted">
         {APP_NAME} · versión {APP_VERSION}
       </p>
 
-      <ConfirmDialog
-        open={confirm}
-        title="¿Cerrar sesión?"
-        confirmLabel="Cerrar sesión"
-        confirmVariant="danger"
-        onCancel={() => setConfirm(false)}
-        onConfirm={() => {
-          setConfirm(false)
-          void signOut()
-        }}
-      >
-        Las visitas en curso que no hayas finalizado se quedan guardadas en este teléfono.
-      </ConfirmDialog>
     </div>
   )
 }

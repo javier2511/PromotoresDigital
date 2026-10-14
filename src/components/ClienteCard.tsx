@@ -1,6 +1,7 @@
-import { ChevronRight, MapPinOff, Navigation, Timer } from 'lucide-react'
+import { CalendarDays, ChevronRight, MapPinOff, Navigation, Timer } from 'lucide-react'
 import { Link } from 'react-router'
 import type { ClienteConDistancia } from '../data/hooks'
+import { DIAS, diaHoy } from '../lib/dias'
 import { formatDistance } from '../lib/geo'
 import { ClienteAvatar } from './ClienteAvatar'
 import { Badge } from './ui/Badge'
@@ -51,6 +52,11 @@ export function ClienteCard({
           ) : (
             <Badge tone="warning" icon={<MapPinOff className="size-3" />}>
               Sin ubicación
+            </Badge>
+          )}
+          {cliente.dias.length > 0 && (
+            <Badge tone={cliente.dias.includes(diaHoy()) ? 'brand' : 'neutral'} icon={<CalendarDays className="size-3" />}>
+              {cliente.dias.map((d) => DIAS[d - 1].corto).join(' · ')}
             </Badge>
           )}
           {cliente.codigo && <Badge>#{cliente.codigo}</Badge>}

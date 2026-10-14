@@ -3,6 +3,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { useNavigate, useSearchParams } from 'react-router'
 import { ClienteAvatar } from '../components/ClienteAvatar'
 import { ErrorState } from '../components/ErrorState'
+import { FiltroDias } from '../components/FiltroDias'
+import { filtrarPorDia, useFiltroDia } from '../lib/filtro-dia'
 import { LocationBanner } from '../components/LocationBanner'
 import type { ClientMapHandle } from '../components/map/ClientMap'
 import { requestCompassPermission } from '../components/map/useCompass'
@@ -163,10 +165,20 @@ export function MapaPage() {
       { replace: true },
     )
 
-  const visibles = useMemo(
-    () => (clientes ?? []).filter((c) => filtro === 'todos' || !c.visitado),
-    [clientes, filtro],
-  )
+  const [dia, setDia] = useFiltroDia()
+  const delDia = useMemo(() => filtrarPorDia(clientes ?? [], dia), [clientes, dia])
+  const pendientesDelDia = useMemo(() => delDia.filter((c) => !c.visitado).length, [delDia])
+  const visibles = useMemo(() => delDia.filter((c) => filtro === 'todos' || !c.visitado), [delDia, filtro])
+  const filtroDias = (className?: string) =>
+    clientes ? (
+      <FiltroDias
+        clientes={clientes}
+        conteoDe={clientes.filter((c) => filtro === 'todos' || !c.visitado)}
+        dia={dia}
+        onChange={setDia}
+        className={className}
+      />
+    ) : null
   const ordenados = useMemo(() => [...visibles].sort(byDistance), [visibles])
   const selected = clientes?.find((c) => c.key === selectedKey)
   const nearest = ordenados.find((c) => !c.visitado && c.distance !== null)
@@ -207,10 +219,11 @@ export function MapaPage() {
             value={filtro}
             onChange={(v) => setParam('f', v === 'pendientes' ? null : v)}
             options={[
-              { value: 'pendientes', label: 'Pendientes', count: progreso?.pendientes },
-              { value: 'todos', label: 'Todos', count: progreso?.total },
+              { value: 'pendientes', label: 'Pendientes', count: clientes ? pendientesDelDia : undefined },
+              { value: 'todos', label: 'Todos', count: clientes ? delDia.length : undefined },
             ]}
           />
+          {filtroDias('flex-wrap')}
         </div>
         <ul className="flex-1 overflow-y-auto p-2">
           {ordenados.map((c) => (
@@ -266,10 +279,11 @@ export function MapaPage() {
               onChange={(v) => setParam('f', v === 'pendientes' ? null : v)}
               className="bg-transparent p-0"
               options={[
-                { value: 'pendientes', label: 'Pendientes', count: progreso?.pendientes },
-                { value: 'todos', label: 'Todos', count: progreso?.total },
+                { value: 'pendientes', label: 'Pendientes', count: clientes ? pendientesDelDia : undefined },
+                { value: 'todos', label: 'Todos', count: clientes ? delDia.length : undefined },
               ]}
             />
+            {filtroDias('px-1 pt-1.5 pb-0.5')}
           </div>
         </div>
 
