@@ -59,6 +59,7 @@ const CAMPOS: Record<string, string> = {
   precision: 'Precisión GPS',
   estado: 'Estado',
   duracion: 'Duración',
+  realizada: 'Visita realizada',
   visita: 'Visita',
   preguntaTexto: 'Texto de la pregunta',
   respuesta: 'Respuesta',
@@ -153,7 +154,8 @@ function ReglasCard({ formulario }: { formulario: Formulario }) {
     const texto = q ? (q.text.length > 48 ? `${q.text.slice(0, 48)}…` : q.text) : key
     return `P${numero.get(key) ?? '?'} «${texto}»`
   }
-  const ok = d.tabla !== null && (d.leidas === 0 || d.aplicadas > 0)
+  const sinFilas = d.tabla !== null && d.leidas === 0
+  const ok = d.tabla !== null && d.aplicadas > 0
   const columnas: [string, string | undefined][] = [
     ['Pregunta que se muestra', d.columnas.pregunta],
     ['Depende de la pregunta', d.columnas.dependeDe],
@@ -187,6 +189,16 @@ function ReglasCard({ formulario }: { formulario: Formulario }) {
             </div>
           ))}
         </dl>
+      )}
+      {sinFilas && (
+        <div className="border-t border-line bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          <p className="font-semibold">No se leyó ninguna regla</p>
+          <p className="mt-1">
+            Si en Supabase la tabla "{d.tabla}" sí tiene reglas, a los usuarios les falta permiso para leerla (política
+            RLS de lectura). Ejecuta <code className="font-mono">supabase/05_permiso_leer_preguntas.sql</code> en el SQL
+            Editor.
+          </p>
+        </div>
       )}
       {d.descartadas.length > 0 && (
         <div className="border-t border-line bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
@@ -292,6 +304,7 @@ export function DiagnosticoPage() {
         reglas: formulario?.rules.length ?? null,
       },
       reglas: formulario?.diagnostico ?? null,
+      preguntas: formulario?.questions.map((q) => ({ id: q.id, texto: q.text, tipo: q.type, opciones: q.options })) ?? null,
       ultimoErrorAlGuardar: leerUltimoError(),
     }
     try {

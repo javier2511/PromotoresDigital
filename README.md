@@ -93,15 +93,18 @@ columnas (por ejemplo `latitud`/`lat`, `user_id`/`usuario_id`/`email`, `visitado
    ```
 
    Guarda (commit) y Vercel/Cloudflare vuelve a publicar en un par de minutos.
-4. ¿Prefieres que lo ajusten por ti? Ejecuta `supabase/01_ver_estructura.sql` en el *SQL Editor* de
-   Supabase (solo lee nombres de tablas, columnas y políticas; no tus datos) y comparte el resultado.
+4. ¿Prefieres que lo ajusten por ti? Ejecuta `supabase/04_reporte_para_revisar.sql` en el *SQL Editor* de
+   Supabase y comparte la celda `reporte` que sale. Es solo lectura: trae la estructura de tus tablas
+   (columnas, tipos, cuáles son obligatorias, políticas RLS), tus preguntas y reglas, y las últimas 3 visitas
+   y 12 respuestas para ver cómo las guardaba FlutterFlow. No incluye clientes ni usuarios.
+   (`01_ver_estructura.sql` es la versión corta: solo nombres de tablas, columnas y políticas.)
 
 ### Cómo escribe en tu base (igual que FlutterFlow)
 
 Al finalizar una visita la app:
 
-1. Inserta una fila en **visitas** con el cliente, el usuario, inicio y fin, coordenadas, distancia y estado
-   (solo en las columnas que existan).
+1. Inserta una fila en **visitas** con el cliente, el usuario, inicio y fin, coordenadas, distancia, estado y
+   `visita_realizada = true` (solo en las columnas que existan).
 2. Inserta en **respuestas** una fila por cada pregunta visible respondida (pregunta, respuesta y visita).
    Las respuestas de opción múltiple se guardan como texto separado por comas.
 3. Marca al cliente como visitado en **clientes** (si la columna es booleana guarda `true`; si es texto,
@@ -159,8 +162,12 @@ Cada regla dice: *muestra la pregunta X cuando la respuesta a la pregunta Y es V
 
 En **Perfil → Verificar conexión → Reglas de las preguntas** ves cuántas reglas leyó y aplicó, qué columna
 tomó para cada parte, cómo interpretó cada regla ("Se muestra P3 si P1 = «Sí»") y cuáles no pudo usar y por
-qué. Si ahí dice que se aplican 0, comparte ese reporte (*Copiar reporte*) o ajusta los nombres en
-`src/config/schema.ts` → `reglas`.
+qué. Una regla también puede mostrar varias preguntas a la vez (`"3, 5"` o un arreglo `{3,5}`).
+
+- Si dice **"No se leyó ninguna regla"** pero tu tabla sí tiene filas, falta el permiso de lectura: ejecuta
+  `supabase/05_permiso_leer_preguntas.sql` (solo da permiso de leer preguntas y reglas).
+- Si dice que se aplican 0, comparte ese reporte (*Copiar reporte*, ya incluye tus reglas y preguntas) o el de
+  `04_reporte_para_revisar.sql`.
 
 ## Seguridad recomendada
 

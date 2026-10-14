@@ -17,6 +17,8 @@ export interface DiagnosticoReglas {
   aplicadas: number
   /** Ejemplos de filas que no se pudieron usar y por qué. */
   descartadas: string[]
+  /** Primeras filas tal como llegan de la tabla de reglas (para el reporte de Verificar conexión). */
+  muestra: Row[]
 }
 
 export interface Formulario {
@@ -56,27 +58,46 @@ function toQuestion(row: Row, index: number, ctx: SchemaContext): Question {
   }
 }
 
-function toRule(
+/** Una celda puede traer varias preguntas: [2, 3], "{2,3}" o "2, 3". */
+function referencias(raw: unknown, pregunta: (referencia: unknown) => string | null): unknown[] {
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === 'string' && /[,;|]/.test(raw) && pregunta(raw) === null) {
+    return raw
+      .replace(/^[[{(]|[\]})]$/g, '')
+      .split(/[,;|]/)
+      .map((r) => r.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+  }
+  return [raw]
+}
+
+function toRules(
   row: Row,
   c: ColumnasRegla,
   pregunta: (referencia: unknown) => string | null,
-): Rule | string {
+): Rule[] | string {
   const rawTarget = row[c.pregunta!]
   const rawSource = row[c.dependeDe!]
   if (rawTarget === null || rawTarget === undefined || rawSource === null || rawSource === undefined) {
     return 'le falta la pregunta o la pregunta de la que depende'
   }
-  const target = pregunta(rawTarget)
   const source = pregunta(rawSource)
-  if (!target) return `la pregunta "${String(rawTarget)}" no existe (o está inactiva)`
   if (!source) return `la pregunta "${String(rawSource)}" no existe (o está inactiva)`
-  if (target === source) return 'la pregunta depende de sí misma'
   const rawValue = c.valor ? row[c.valor] : null
   const value = rawValue === null || rawValue === undefined ? '' : String(rawValue)
   let operator = parseOperator(c.operador ? row[c.operador] : null)
   // "Igual a" sin valor: basta con que la pregunta esté respondida.
   if (operator === 'eq' && value.trim() === '') operator = 'answered'
-  return { target, source, operator, value, action: parseAction(c.accion ? row[c.accion] : null) }
+  const action = parseAction(c.accion ? row[c.accion] : null)
+
+  const rules: Rule[] = []
+  for (const ref of referencias(rawTarget, pregunta)) {
+    const target = pregunta(ref)
+    if (!target) return `la pregunta "${String(ref)}" no existe (o está inactiva)`
+    if (target === source) return 'la pregunta depende de sí misma'
+    rules.push({ target, source, operator, value, action })
+  }
+  return rules.length > 0 ? rules : 'le falta la pregunta que se muestra'
 }
 
 export async function fetchFormulario(ctx: SchemaContext): Promise<Formulario> {
@@ -109,11 +130,11 @@ export async function fetchFormulario(ctx: SchemaContext): Promise<Formulario> {
   const descartadas: string[] = []
   if (c.pregunta && c.dependeDe) {
     reglaRows.forEach((row, i) => {
-      const rule = toRule(row, c, pregunta)
-      if (typeof rule === 'string') {
-        if (descartadas.length < 10) descartadas.push(`Fila ${i + 1}: ${rule}`)
+      const result = toRules(row, c, pregunta)
+      if (typeof result === 'string') {
+        if (descartadas.length < 10) descartadas.push(`Fila ${i + 1}: ${result}`)
       } else {
-        rules.push(rule)
+        rules.push(...result)
       }
     })
   } else if (reglaRows.length > 0) {
@@ -123,6 +144,13 @@ export async function fetchFormulario(ctx: SchemaContext): Promise<Formulario> {
   return {
     questions,
     rules,
-    diagnostico: { tabla: r.table, columnas: c, leidas: reglaRows.length, aplicadas: rules.length, descartadas },
+    diagnostico: {
+      tabla: r.table,
+      columnas: c,
+      leidas: reglaRows.length,
+      aplicadas: rules.length,
+      descartadas,
+      muestra: reglaRows.slice(0, 15),
+    },
   }
 }

@@ -113,4 +113,38 @@ describe('insertarConRecuperacion', () => {
     expect(r2.error?.code).toBe('22P02')
     expect(t2.enviados.length).toBe(1)
   })
+
+  it('llena una columna obligatoria de "sí" con el tipo que acepte la base', async () => {
+    const obligatoria = (f: Record<string, unknown>) =>
+      'visita_realizada' in f ? null : err('null value in column "visita_realizada" of relation "visitas" violates not-null constraint', '23502')
+    // Columna numérica: rechaza true y acepta 1.
+    const entero = tabla((f) => obligatoria(f) ?? (typeof f.visita_realizada === 'number' ? null : err(`invalid input syntax for type integer: "${String(f.visita_realizada)}"`)))
+    const rellenar = (c: string) => (c === 'visita_realizada' ? true : undefined)
+    const r = await insertarConRecuperacion([{ id_cliente: 5 }], { esenciales: ['id_cliente'], quitarPrimero: [], rellenar }, entero.enviar)
+    expect(r.error).toBeNull()
+    expect(r.filas[0]).toEqual({ id_cliente: 5, visita_realizada: 1 })
+
+    // Texto con CHECK ('Si', 'No'): prueba hasta llegar a "Si".
+    const check = tabla((f) => obligatoria(f) ?? (f.visita_realizada === 'Si' ? null : err('new row for relation "visitas" violates check constraint "visitas_visita_realizada_check"', '23514')))
+    const r2 = await insertarConRecuperacion([{ id_cliente: 5 }], { esenciales: ['id_cliente'], quitarPrimero: [], rellenar }, check.enviar)
+    expect(r2.error).toBeNull()
+    expect(r2.filas[0].visita_realizada).toBe('Si')
+
+    // Nada sirve: se rinde sin ciclar.
+    const nunca = tabla((f) => obligatoria(f) ?? err('new row for relation "visitas" violates check constraint "visitas_visita_realizada_check"', '23514'))
+    const r3 = await insertarConRecuperacion([{ id_cliente: 5 }], { esenciales: ['id_cliente'], quitarPrimero: [], rellenar }, nunca.enviar)
+    expect(r3.error?.code).toBe('23514')
+    expect(nunca.enviados.length).toBeLessThan(12)
+  })
+
+  it('sin permiso (RLS) y sin columna de usuario no reintenta de más', async () => {
+    const t = tabla(() => err('new row violates row-level security policy for table "visitas"', '42501'))
+    const r = await insertarConRecuperacion(
+      [{ cliente_id: 1 }],
+      { esenciales: ['cliente_id'], quitarPrimero: [], usuario: { columna: 'user_id', alternativas: ['a', 'b'] } },
+      t.enviar,
+    )
+    expect(r.error?.code).toBe('42501')
+    expect(t.enviados.length).toBe(1)
+  })
 })

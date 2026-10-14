@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js'
-import { VALOR_ESTADO_VISITA, VALOR_VISITADO_TEXTO } from '../config/schema'
+import { VALOR_ESTADO_VISITA, VALOR_VISITA_REALIZADA, VALOR_VISITADO_TEXTO } from '../config/schema'
 import { serializeAnswer, isAnswered, type Answers, type Question } from '../lib/questions'
 import { ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
@@ -9,6 +9,7 @@ import {
   insertarConRecuperacion,
   palabras,
   valorFecha,
+  VALORES_SI,
   type Recuperacion,
 } from './insercion'
 
@@ -62,6 +63,10 @@ function valorDeducido(columna: string, input: FinalizarVisitaInput, visitaId: I
   const p = palabras(columna)
   const tiene = (...w: string[]) => w.some((x) => p.includes(x))
   const { cliente, position, startedAt } = input
+  const esFecha = tiene('fecha', 'hora', 'date', 'time', 'dia', 'at')
+  if (!esFecha && tiene('realizada', 'realizado', 'completada', 'completado', 'finalizada', 'finalizado', 'terminada', 'terminado', 'concluida', 'hecha', 'efectiva', 'visitado', 'visitada')) {
+    return VALOR_VISITA_REALIZADA
+  }
   if (tiene('visita') && visitaId !== null) return visitaId
   if (tiene('cliente', 'tienda', 'pdv')) return cliente.id
   if (tiene('usuario', 'user', 'promotor', 'uid', 'vendedor', 'empleado')) return valoresUsuario(columna, input)[0]
@@ -100,6 +105,7 @@ async function insertVisita(input: FinalizarVisitaInput): Promise<Id | null> {
     put(row, c.precision, Math.round(position.accuracy))
   }
   put(row, c.estado, VALOR_ESTADO_VISITA)
+  put(row, c.realizada, VALOR_VISITA_REALIZADA)
   put(row, c.duracion, Math.max(1, Math.round((fin.getTime() - startedAt) / 60000)))
 
   const fechas: Record<string, Date> = {}
@@ -108,9 +114,10 @@ async function insertVisita(input: FinalizarVisitaInput): Promise<Id | null> {
   const recuperacion: Recuperacion = {
     esenciales: [c.cliente],
     // Primero se sacrifica lo menos importante; la ubicación (evidencia de la visita) al final.
-    quitarPrimero: [c.estado, c.duracion, c.precision, c.inicio, c.ubicacion, c.fin, c.distancia, c.latitud, c.longitud, c.usuario],
+    quitarPrimero: [c.estado, c.duracion, c.precision, c.inicio, c.ubicacion, c.realizada, c.fin, c.distancia, c.latitud, c.longitud, c.usuario],
     rellenar: (columna) => valorDeducido(columna, input),
     usuario: c.usuario ? { columna: c.usuario, alternativas: valoresUsuario(c.usuario, input) } : undefined,
+    alternativas: c.realizada && VALOR_VISITA_REALIZADA === true ? { [c.realizada]: VALORES_SI } : {},
     fechas,
   }
 

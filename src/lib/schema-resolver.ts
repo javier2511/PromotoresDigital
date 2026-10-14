@@ -246,7 +246,7 @@ const CACHE_KEY = 'pd.schema.v1'
 /** Cada hora se vuelve a revisar la base (así se detectan columnas nuevas, p. ej. las de distancia). */
 const CACHE_TTL_MS = 60 * 60 * 1000
 /** Subirlo obliga a todos los teléfonos a volver a detectar al publicar una versión nueva. */
-const DETECCION_VERSION = 2
+const DETECCION_VERSION = 3
 
 function configHash(): string {
   const text = JSON.stringify(schema) + DETECCION_VERSION

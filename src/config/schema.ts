@@ -82,6 +82,7 @@ export type VisitaField =
   | 'precision'
   | 'estado'
   | 'duracion'
+  | 'realizada'
 
 export type RespuestaField =
   | 'id'
@@ -237,15 +238,35 @@ export const schema: Schema = {
       id: ['id', 'id_visita', 'visita_id'],
       cliente: ['cliente_id', 'id_cliente', 'cliente'],
       usuario: COLUMNAS_USUARIO,
-      inicio: ['fecha_inicio', 'hora_inicio', 'inicio', 'inicio_visita', 'started_at', 'check_in'],
-      fin: ['fecha_fin', 'hora_fin', 'fin', 'fin_visita', 'fecha_visita', 'fecha', 'finished_at', 'check_out'],
-      latitud: ['latitud', 'lat', 'latitud_visita', 'latitud_inicio'],
-      longitud: ['longitud', 'lng', 'lon', 'longitud_visita', 'longitud_inicio'],
-      ubicacion: ['ubicacion', 'coordenadas', 'latlng'],
-      distancia: ['distancia', 'distancia_m', 'distancia_metros', 'metros', 'distance'],
-      precision: ['precision', 'precision_m', 'exactitud', 'accuracy'],
-      estado: ['estado', 'estatus', 'status'],
-      duracion: ['duracion', 'duracion_min', 'duracion_minutos', 'minutos'],
+      inicio: ['fecha_inicio', 'hora_inicio', 'fecha_hora_inicio', 'inicio', 'inicio_visita', 'started_at', 'check_in'],
+      fin: ['fecha_fin', 'hora_fin', 'fecha_hora_fin', 'fin', 'fin_visita', 'fecha_visita', 'fecha', 'finished_at', 'check_out'],
+      latitud: ['latitud', 'lat', 'latitud_visita', 'lat_visita', 'latitud_inicio'],
+      longitud: ['longitud', 'lng', 'lon', 'longitud_visita', 'lng_visita', 'lon_visita', 'longitud_inicio'],
+      ubicacion: ['ubicacion', 'ubicacion_visita', 'coordenadas', 'coordenadas_visita', 'latlng'],
+      distancia: [
+        'distancia',
+        'distancia_m',
+        'distancia_metros',
+        'distancia_cliente',
+        'distancia_visita',
+        'distancia_tienda',
+        'metros',
+        'distance',
+      ],
+      precision: ['precision', 'precision_m', 'precision_gps', 'precision_visita', 'exactitud', 'accuracy'],
+      estado: ['estado', 'estado_visita', 'estatus', 'estatus_visita', 'status', 'status_visita'],
+      duracion: ['duracion', 'duracion_visita', 'duracion_min', 'duracion_minutos', 'minutos'],
+      // Marca de "visita hecha" (FlutterFlow la guardaba en true al finalizar).
+      realizada: [
+        'visita_realizada',
+        'realizada',
+        'visita_completada',
+        'completada',
+        'visita_finalizada',
+        'finalizada',
+        'visita_terminada',
+        'terminada',
+      ],
     },
     required: ['cliente'],
   },
@@ -327,6 +348,12 @@ export const VALOR_VISITADO_TEXTO = 'visitado'
 
 /** Valor que se escribe en visitas.estado (si la columna existe). */
 export const VALOR_ESTADO_VISITA = 'finalizada'
+
+/**
+ * Valor de visitas.visita_realizada (o similar) al finalizar. Si la columna no es booleana, la app prueba
+ * 1, "Sí", "Si"… hasta que la base lo acepte.
+ */
+export const VALOR_VISITA_REALIZADA = true
 
 /**
  * INFORMACIÓN DEL CLIENTE (ficha del cliente)
