@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import type { User } from '@supabase/supabase-js'
 import { useCallback, useEffect, useRef } from 'react'
+import { parseLocation, type LatLng } from '../lib/geo'
 import { clearSchemaCache, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { useUser } from '../providers/AuthProvider'
@@ -9,17 +10,19 @@ import { queryKeys, useSchema } from './hooks'
 import { insertarConRecuperacion } from './insercion'
 
 const intentoKey = (userId: string) => `pd.perfil.creado.v2.${userId}`
-/** Precisión mínima (m) para guardar la ubicación del promotor. */
-const PRECISION_MAX_M = 500
+/** Con esta precisión (m) la ubicación se guarda de inmediato; si no, se espera un poco por una mejor. */
+const PRECISION_BUENA_M = 100
+/** Tiempo máximo de espera por una mejor lectura; después se guarda la mejor que haya (aunque sea aproximada). */
+const ESPERA_MAX_MS = 20_000
 
 /** Columnas de ubicación de la tabla de usuarios/promotores (mismo formato de texto que usaba FlutterFlow). */
-function filaUbicacion(ctx: SchemaContext, pos: GeoPosition | null): Row {
+function filaUbicacion(ctx: SchemaContext, pos: LatLng | null, conTexto = true): Row {
   const c = ctx.tables.perfiles.columns
   const fila: Row = {}
   if (!pos) return fila
   if (c.latitud) fila[c.latitud] = pos.lat
   if (c.longitud) fila[c.longitud] = pos.lng
-  if (c.ubicacion) fila[c.ubicacion] = `LatLng(lat: ${pos.lat}, lng: ${pos.lng})`
+  if (c.ubicacion && conTexto) fila[c.ubicacion] = `LatLng(lat: ${pos.lat}, lng: ${pos.lng})`
   return fila
 }
 
@@ -52,18 +55,21 @@ export async function crearPerfil(ctx: SchemaContext, user: User, pos: GeoPositi
   return !error
 }
 
-/** Guarda la ubicación del usuario en su fila de usuarios/promotores (si estaba vacía). */
-export async function guardarUbicacionPerfil(ctx: SchemaContext, pos: GeoPosition): Promise<boolean> {
+/** Guarda la ubicación del usuario en su fila de usuarios/promotores. Lanza un error si la base no lo permite. */
+export async function guardarUbicacionPerfil(ctx: SchemaContext, pos: LatLng, conTexto = true): Promise<void> {
   const t = ctx.tables.perfiles
-  if (!t.table || !t.columns.id || !ctx.perfil) return false
-  const cambios = filaUbicacion(ctx, pos)
-  if (Object.keys(cambios).length === 0) return false
+  if (!t.table || !t.columns.id || !ctx.perfil) throw new Error('No se encontró tu fila en la tabla de usuarios.')
+  const cambios = filaUbicacion(ctx, pos, conTexto)
+  if (Object.keys(cambios).length === 0) throw new Error(`La tabla "${t.table}" no tiene columnas de ubicación.`)
   const { data, error } = await supabase
     .from(t.table)
     .update(cambios)
     .eq(t.columns.id, ctx.perfil.id)
     .select(t.columns.id)
-  return !error && Array.isArray(data) && data.length > 0
+  if (error) throw error
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error(`La base de datos no permitió actualizar tu fila en "${t.table}" (permisos RLS de actualización).`)
+  }
 }
 
 export function useAsegurarPerfil() {
@@ -72,6 +78,8 @@ export function useAsegurarPerfil() {
   const { position } = useGeo()
   const queryClient = useQueryClient()
   const ubicacionIntentada = useRef(false)
+  const mejor = useRef<GeoPosition | null>(null)
+  const espera = useRef<number | null>(null)
 
   const refrescar = useCallback(() => {
     clearSchemaCache()
@@ -88,20 +96,41 @@ export function useAsegurarPerfil() {
     } catch {
       return
     }
-    const pos = position && position.accuracy <= PRECISION_MAX_M ? position : null
+    const pos = position && position.accuracy <= PRECISION_BUENA_M ? position : null
     void crearPerfil(ctx, user, pos).then((creado) => {
       if (creado) refrescar()
     })
     // Se crea en cuanto se conoce el contexto (una sola vez); si aún no hay GPS, la ubicación se agrega en el paso 2.
   }, [ctx, user, position, refrescar])
 
-  // 2) Guardar su ubicación (la del registro) cuando el GPS la dé, si su fila aún no la tiene.
+  // 2) Guardar su ubicación (la del registro) si su fila aún no tiene latitud/longitud.
   useEffect(() => {
-    if (!ctx?.perfil || ctx.perfil.conUbicacion !== false || !position || ubicacionIntentada.current) return
-    if (position.accuracy > PRECISION_MAX_M) return
-    ubicacionIntentada.current = true
-    void guardarUbicacionPerfil(ctx, position).then((ok) => {
-      if (ok) refrescar()
-    })
+    const perfil = ctx?.perfil
+    if (!ctx || !perfil || perfil.conUbicacion !== false || ubicacionIntentada.current) return
+    const guardar = (pos: LatLng, conTexto: boolean) => {
+      if (ubicacionIntentada.current) return
+      ubicacionIntentada.current = true
+      if (espera.current !== null) window.clearTimeout(espera.current)
+      guardarUbicacionPerfil(ctx, pos, conTexto).then(refrescar, () => {
+        /* sin permiso o sin conexión: se intenta de nuevo la próxima vez que abra la app */
+      })
+    }
+    // a) Ya hay ubicación en texto (p. ej. la que guardó FlutterFlow al registrarse): se copia a latitud/longitud.
+    const deTexto = parseLocation(perfil.ubicacionTexto)
+    if (deTexto) return guardar(deTexto, false)
+    // b) Con el GPS: se guarda en cuanto la lectura es buena o, si no mejora, la mejor que haya tras unos segundos.
+    if (!position) return
+    if (!mejor.current || position.accuracy < mejor.current.accuracy) mejor.current = position
+    if (mejor.current.accuracy <= PRECISION_BUENA_M) return guardar(mejor.current, true)
+    espera.current ??= window.setTimeout(() => {
+      if (mejor.current) guardar(mejor.current, true)
+    }, ESPERA_MAX_MS)
   }, [ctx, position, refrescar])
+
+  useEffect(
+    () => () => {
+      if (espera.current !== null) window.clearTimeout(espera.current)
+    },
+    [],
+  )
 }

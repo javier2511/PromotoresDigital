@@ -126,7 +126,10 @@ La primera vez que un usuario entra, si no existe en **promotores** la app agreg
 nombre); sin ella Supabase rechaza la visita porque `visitas.id_promotor` debe existir en `promotores`. Al crear
 la cuenta se pide el GPS y su ubicación se guarda en `latitud`, `longitud` y `ubicacion` (texto
 `LatLng(lat: …, lng: …)`, como FlutterFlow). Si en ese momento no hay GPS, se guarda en cuanto el teléfono lo
-dé; a los promotores que ya existían sin ubicación también se les llena así (solo si está vacía).
+dé (si la lectura es imprecisa, como en computadora, espera hasta 20 s por una mejor y guarda la mejor que haya);
+a los promotores que ya existían sin latitud/longitud también se les llena así, y si su columna `ubicacion` ya
+tenía el texto de FlutterFlow, se copian esas coordenadas. En **Verificar conexión → Tus datos** se ve si la
+ubicación del usuario está guardada, con un botón **Guardar ahora** que muestra el error si algo lo impide.
 
 Si tu tabla tiene columnas obligatorias que la app no conoce (por ejemplo `hora`, `fecha`, `id_cliente`), las
 llena según su nombre; si una columna es de tipo `time` envía solo la hora; y si la base rechaza un dato

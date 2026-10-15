@@ -39,8 +39,10 @@ export interface OwnerFilter {
 export interface Perfil {
   id: string | number
   nombre: string | null
-  /** false si la tabla tiene columnas de ubicación y aún están vacías. */
+  /** false si la tabla tiene columnas de latitud/longitud (o ubicación) y aún están vacías. */
   conUbicacion?: boolean
+  /** Texto de la columna "ubicacion", si tiene (p. ej. "LatLng(lat: …, lng: …)" que guardaba FlutterFlow). */
+  ubicacionTexto?: string | null
 }
 
 export interface SchemaContext {
@@ -192,12 +194,17 @@ async function resolvePerfil(t: ResolvedTable<FieldsOf<'perfiles'>>, user: User)
     const row = (data as Row[] | null)?.[0]
     if (!error && row) {
       const nombre = t.columns.nombre ? row[t.columns.nombre] : null
-      const { latitud, ubicacion } = t.columns
-      const vacio = (col: string | undefined) => !col || row[col] === null || row[col] === undefined || row[col] === ''
+      const { latitud, longitud, ubicacion } = t.columns
+      const vacio = (col: string) => row[col] === null || row[col] === undefined || String(row[col]).trim() === ''
+      // Lo que cuenta son latitud y longitud; la columna de texto solo si no existen esas dos.
+      const coordenadas = [latitud, longitud].filter((c): c is string => Boolean(c))
+      const conUbicacion =
+        coordenadas.length > 0 ? coordenadas.every((c) => !vacio(c)) : ubicacion ? !vacio(ubicacion) : true
       return {
         id: row[t.columns.id] as string | number,
         nombre: typeof nombre === 'string' && nombre.trim() ? nombre.trim() : null,
-        conUbicacion: !(latitud || ubicacion) || !(vacio(latitud) && vacio(ubicacion)),
+        conUbicacion,
+        ubicacionTexto: ubicacion && !vacio(ubicacion) ? String(row[ubicacion]) : null,
       }
     }
   }

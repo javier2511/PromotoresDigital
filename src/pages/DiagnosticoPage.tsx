@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
+import { UbicacionPerfil } from '../components/UbicacionPerfil'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -17,6 +18,7 @@ import { leerUltimoError } from '../lib/errors'
 import { describirRegla } from '../lib/rules'
 import { clearSchemaCache, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
 import { useUser } from '../providers/AuthProvider'
+import { useGeo } from '../providers/GeoProvider'
 
 const TITULOS: Record<keyof Schema, string> = {
   clientes: 'Clientes',
@@ -290,6 +292,7 @@ export function DiagnosticoPage() {
   const { data: ctx, isPending, error, refetch } = useSchema()
   const { clientes } = useClientes()
   const { formulario } = useFormulario()
+  const { position, status } = useGeo()
   const [busy, setBusy] = useState(false)
 
   const redetectar = async () => {
@@ -313,7 +316,8 @@ export function DiagnosticoPage() {
       usuario: { id: user.id, email: user.email },
       tablas: ctx?.tables,
       filtroClientes: ctx?.owner,
-      perfil: ctx?.perfil ? { encontrado: true } : null,
+      perfil: ctx?.perfil ? { encontrado: true, conUbicacion: ctx.perfil.conUbicacion ?? null } : null,
+      gps: position ? { precision: Math.round(position.accuracy) } : status,
       conteos: {
         clientes: clientes?.length ?? null,
         clientesConUbicacion: clientes?.filter((c) => c.location).length ?? null,
@@ -393,6 +397,7 @@ export function DiagnosticoPage() {
                 <strong className="text-fg">{formulario?.questions.length ?? '…'}</strong> · reglas:{' '}
                 <strong className="text-fg">{formulario?.rules.length ?? '…'}</strong>
               </p>
+              <UbicacionPerfil ctx={ctx} />
             </Card>
             {formulario && <ReglasCard formulario={formulario} />}
             <InfoClienteCard
