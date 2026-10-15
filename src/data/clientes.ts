@@ -3,6 +3,7 @@ import { ESTATUS_ASIGNACION_COMPLETADA, ESTATUS_ASIGNACION_OCULTA, VALORES_VISIT
 import { locationFromColumns, parseLocation, type LatLng } from '../lib/geo'
 import { diasDe } from '../lib/dias'
 import { recentlyFinished } from '../lib/draft'
+import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
 import { likeExact, ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
 import { normalize, toBoolean } from '../lib/text'
@@ -24,6 +25,8 @@ export interface Cliente {
   codigo: string | null
   location: LatLng | null
   visitado: boolean
+  /** Saldo de puntos (el dato "destacado" de la ficha, p. ej. saldo_premia), para mostrarlo en la lista. */
+  saldo: unknown
   /** Días de la semana en que toca visitarlo (1 = lunes … 7 = domingo), de la columna dia_visita. */
   dias: number[]
   /** Asignación pendiente (o la última completada) cuando los clientes se asignan por la tabla asignaciones. */
@@ -105,6 +108,7 @@ function toCliente(row: Row, ctx: SchemaContext, visitedIds: Set<string> | null)
     codigo: text(c.codigo ? row[c.codigo] : null) ?? (c.id && !['id', 'uuid'].includes(c.id) ? key : null),
     location,
     visitado,
+    saldo: null,
     dias: c.diaVisita ? diasDe(row[c.diaVisita]) : [],
     asignacion: null,
     raw: row,
@@ -183,7 +187,19 @@ async function fetchClientesPorLlave(ctx: SchemaContext, llaves: string[]): Prom
   return partes.flat()
 }
 
+/** Llena el saldo con la misma columna que la ficha muestra como dato destacado (INFO_CLIENTE). */
+function conSaldo(clientes: Cliente[], ctx: SchemaContext): Cliente[] {
+  if (clientes.length === 0) return clientes
+  const columnas = [...new Set(clientes.flatMap((c) => Object.keys(c.raw)))]
+  const col = resolverInfoCliente(columnas, columnasInternas(ctx)).find((c) => c.tipo === 'destacado')?.columna
+  return col ? clientes.map((c) => ({ ...c, saldo: c.raw[col] ?? null })) : clientes
+}
+
 export async function fetchClientes(ctx: SchemaContext, user: User): Promise<Cliente[]> {
+  return conSaldo(await fetchClientesSinSaldo(ctx, user), ctx)
+}
+
+async function fetchClientesSinSaldo(ctx: SchemaContext, user: User): Promise<Cliente[]> {
   const t = ctx.tables.clientes
   if (!t.table) throw new SchemaError('No se encontró la tabla de clientes en Supabase.')
   if (!t.columns.id) throw new SchemaError(`La tabla "${t.table}" no tiene una columna de id reconocible.`)
