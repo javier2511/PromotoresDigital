@@ -39,6 +39,8 @@ export interface OwnerFilter {
 export interface Perfil {
   id: string | number
   nombre: string | null
+  /** false si la tabla tiene columnas de ubicación y aún están vacías. */
+  conUbicacion?: boolean
 }
 
 export interface SchemaContext {
@@ -190,9 +192,12 @@ async function resolvePerfil(t: ResolvedTable<FieldsOf<'perfiles'>>, user: User)
     const row = (data as Row[] | null)?.[0]
     if (!error && row) {
       const nombre = t.columns.nombre ? row[t.columns.nombre] : null
+      const { latitud, ubicacion } = t.columns
+      const vacio = (col: string | undefined) => !col || row[col] === null || row[col] === undefined || row[col] === ''
       return {
         id: row[t.columns.id] as string | number,
         nombre: typeof nombre === 'string' && nombre.trim() ? nombre.trim() : null,
+        conUbicacion: !(latitud || ubicacion) || !(vacio(latitud) && vacio(ubicacion)),
       }
     }
   }

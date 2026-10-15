@@ -104,7 +104,7 @@ export type RespuestaField =
 
 export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha'
 
-export type PerfilField = 'id' | 'authId' | 'email' | 'nombre'
+export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion'
 
 export type AsignacionField = 'id' | 'cliente' | 'usuario' | 'fecha' | 'orden' | 'estatus'
 
@@ -362,6 +362,10 @@ export const schema: Schema = {
       authId: ['user_id', 'auth_id', 'uid', 'id_auth', 'auth_user_id'],
       email: ['email', 'correo', 'correo_electronico', 'mail'],
       nombre: ['nombre', 'nombre_completo', 'full_name', 'name', 'display_name', 'nombres'],
+      // Ubicación del promotor al registrarse (se guarda en cuanto el teléfono da su GPS).
+      latitud: ['latitud', 'lat', 'latitud_registro'],
+      longitud: ['longitud', 'lng', 'lon', 'longitud_registro'],
+      ubicacion: ['ubicacion', 'ubicacion_registro', 'coordenadas'],
     },
     required: ['id'],
   },

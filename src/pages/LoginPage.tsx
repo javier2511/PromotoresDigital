@@ -9,6 +9,7 @@ import { APP_NAME } from '../config/app'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../providers/AuthProvider'
+import { useGeo } from '../providers/GeoProvider'
 
 const FEATURES = [
   { icon: MapPinned, title: 'Tus clientes en el mapa', text: 'Con tu ubicación en tiempo real y los más cercanos primero.' },
@@ -18,6 +19,7 @@ const FEATURES = [
 
 export function LoginPage() {
   const { user, loading: authLoading } = useAuth()
+  const { request: activarUbicacion } = useGeo()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
@@ -59,6 +61,8 @@ export function LoginPage() {
     if (password !== confirmacion) return setError('Las contraseñas no coinciden.')
     setError(null)
     setLoading(true)
+    // Se pide el GPS al registrarse: su ubicación se guarda en la tabla de promotores.
+    activarUbicacion()
     const { data, error: err } = await supabase.auth.signUp({
       email: email.trim(),
       password,

@@ -123,7 +123,10 @@ Al finalizar una visita la app:
    o, si no existe, cuenta como visitado a todo cliente con una visita registrada.)
 
 La primera vez que un usuario entra, si no existe en **promotores** la app agrega su fila (id, correo y
-nombre); sin ella Supabase rechaza la visita porque `visitas.id_promotor` debe existir en `promotores`.
+nombre); sin ella Supabase rechaza la visita porque `visitas.id_promotor` debe existir en `promotores`. Al crear
+la cuenta se pide el GPS y su ubicación se guarda en `latitud`, `longitud` y `ubicacion` (texto
+`LatLng(lat: …, lng: …)`, como FlutterFlow). Si en ese momento no hay GPS, se guarda en cuanto el teléfono lo
+dé; a los promotores que ya existían sin ubicación también se les llena así (solo si está vacía).
 
 Si tu tabla tiene columnas obligatorias que la app no conoce (por ejemplo `hora`, `fecha`, `id_cliente`), las
 llena según su nombre; si una columna es de tipo `time` envía solo la hora; y si la base rechaza un dato
