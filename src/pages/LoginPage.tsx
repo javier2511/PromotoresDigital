@@ -5,7 +5,7 @@ import { LogoMark } from '../components/Logo'
 import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { TextField } from '../components/ui/TextField'
-import { APP_NAME } from '../config/app'
+import { APP_NAME, CONTRASENA_TEMPORAL } from '../config/app'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../providers/AuthProvider'
@@ -18,7 +18,7 @@ const FEATURES = [
 ]
 
 export function LoginPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, marcarContrasenaTemporal } = useAuth()
   const { request: activarUbicacion } = useGeo()
   const navigate = useNavigate()
   const location = useLocation()
@@ -48,10 +48,15 @@ export function LoginPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
+    // Con la contraseña temporal, al entrar se le pide elegir una nueva.
+    const temporal = password === CONTRASENA_TEMPORAL
+    marcarContrasenaTemporal(temporal ? email : null)
     const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     setLoading(false)
-    if (err) setError(friendlyError(err))
-    else navigate(from, { replace: true })
+    if (err) {
+      marcarContrasenaTemporal(null)
+      setError(friendlyError(err))
+    } else navigate(temporal ? '/restablecer' : from, { replace: true })
   }
 
   const onRegistro = async (e: FormEvent) => {

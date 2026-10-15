@@ -34,10 +34,10 @@ const queryClient = new QueryClient({
 })
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading, recovery } = useAuth()
+  const { user, loading, recovery, debeCambiarContrasena } = useAuth()
   const location = useLocation()
   if (loading) return <FullScreenLoader />
-  if (recovery) return <Navigate to="/restablecer" replace />
+  if (recovery || debeCambiarContrasena) return <Navigate to="/restablecer" replace />
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   return children
 }

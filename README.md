@@ -78,6 +78,10 @@ envíale el correo de recuperación desde *Authentication → Users → Send pas
 pantalla `/restablecer` para elegir la nueva contraseña; agrega `https://TU-DOMINIO/restablecer` en
 *Redirect URLs*).
 
+**Contraseña temporal:** si alguien entra con `coca1234` (`CONTRASENA_TEMPORAL` en `src/config/app.ts`), o su
+cuenta tiene `debe_cambiar_contrasena: true` en *User Metadata*, la app no lo deja seguir hasta que elija una
+contraseña nueva (distinta de la temporal).
+
 ## Primer uso: verificar que lee bien tu base de datos
 
 No pude ver tu esquema de Supabase desde aquí, así que la app **detecta sola** los nombres de tus tablas y

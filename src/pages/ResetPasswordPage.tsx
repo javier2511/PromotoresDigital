@@ -9,10 +9,11 @@ import { FullScreenLoader } from '../components/ui/Spinner'
 import { TextField } from '../components/ui/TextField'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
+import { CONTRASENA_TEMPORAL } from '../config/app'
 import { useAuth } from '../providers/AuthProvider'
 
 export function ResetPasswordPage() {
-  const { user, loading: authLoading, finishRecovery } = useAuth()
+  const { user, loading: authLoading, finishRecovery, debeCambiarContrasena, contrasenaCambiada, signOut } = useAuth()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -25,11 +26,13 @@ export function ResetPasswordPage() {
     e.preventDefault()
     if (password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
     if (password !== confirm) return setError('Las contraseñas no coinciden.')
+    if (password === CONTRASENA_TEMPORAL) return setError('Elige una contraseña distinta de la temporal.')
     setError(null)
     setLoading(true)
-    const { error: err } = await supabase.auth.updateUser({ password })
+    const { error: err } = await supabase.auth.updateUser({ password, data: { debe_cambiar_contrasena: false } })
     setLoading(false)
     if (err) return setError(friendlyError(err))
+    contrasenaCambiada()
     finishRecovery()
     toast.success('Contraseña actualizada')
     navigate('/', { replace: true })
@@ -42,8 +45,14 @@ export function ResetPasswordPage() {
         {user ? (
           <form onSubmit={onSubmit} className="mt-6 space-y-5" noValidate>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Crea una contraseña nueva</h1>
-              <p className="mt-1 text-sm text-muted">Para {user.email}</p>
+              <h1 className="text-2xl font-bold tracking-tight">
+                {debeCambiarContrasena ? 'Elige tu nueva contraseña' : 'Crea una contraseña nueva'}
+              </h1>
+              <p className="mt-1 text-sm text-muted">
+                {debeCambiarContrasena
+                  ? `Entraste con una contraseña temporal. Crea una nueva para ${user.email} y sigue trabajando.`
+                  : `Para ${user.email}`}
+              </p>
             </div>
             <TextField
               label="Nueva contraseña"
@@ -78,9 +87,15 @@ export function ResetPasswordPage() {
           </div>
         )}
         <p className="mt-6 text-center text-xs text-muted">
-          <Link to="/login" className="hover:underline">
-            Volver al inicio
-          </Link>
+          {debeCambiarContrasena ? (
+            <button type="button" onClick={() => void signOut()} className="hover:underline">
+              Cerrar sesión
+            </button>
+          ) : (
+            <Link to="/login" className="hover:underline">
+              Volver al inicio
+            </Link>
+          )}
         </p>
       </div>
     </div>
