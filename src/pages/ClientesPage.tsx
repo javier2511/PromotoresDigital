@@ -197,7 +197,7 @@ export function ClientesPage() {
                 type="search"
                 value={q}
                 onChange={(e) => setParam('q', e.target.value)}
-                placeholder="Buscar cliente, dirección…"
+                placeholder="Buscar nombre, número o dirección…"
                 aria-label="Buscar clientes"
                 className="h-full min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted/70"
               />

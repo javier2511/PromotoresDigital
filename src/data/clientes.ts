@@ -101,7 +101,8 @@ function toCliente(row: Row, ctx: SchemaContext, visitedIds: Set<string> | null)
     nombre: text(c.nombre ? row[c.nombre] : null) ?? `Cliente ${key}`,
     direccion: text(c.direccion ? row[c.direccion] : null),
     telefono: text(c.telefono ? row[c.telefono] : null),
-    codigo: text(c.codigo ? row[c.codigo] : null),
+    // Número de cliente: la columna de código o, si no hay, la llave de negocio (p. ej. id_cliente = "120070912").
+    codigo: text(c.codigo ? row[c.codigo] : null) ?? (c.id && !['id', 'uuid'].includes(c.id) ? key : null),
     location,
     visitado,
     dias: c.diaVisita ? diasDe(row[c.diaVisita]) : [],

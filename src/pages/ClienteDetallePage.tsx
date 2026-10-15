@@ -1,6 +1,7 @@
-import { CircleCheck, ClipboardList, MapPinOff, Navigation, Phone, SearchX } from 'lucide-react'
-import { lazy, Suspense } from 'react'
+import { Check, CircleCheck, ClipboardList, Copy, MapPinOff, Navigation, Phone, SearchX } from 'lucide-react'
+import { lazy, Suspense, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
+import { toast } from 'sonner'
 import { ClienteAvatar } from '../components/ClienteAvatar'
 import { ClienteInfo } from '../components/ClienteInfo'
 import { ErrorState } from '../components/ErrorState'
@@ -17,6 +18,35 @@ import { googleMapsDirectionsUrl, wazeUrl } from '../lib/geo'
 import { useUser } from '../providers/AuthProvider'
 
 const ClientMap = lazy(() => import('../components/map/ClientMap'))
+
+/** Número de cliente, grande y con botón para copiarlo (p. ej. para buscarlo en otra app). */
+function NumeroCliente({ numero }: { numero: string }) {
+  const [copiado, setCopiado] = useState(false)
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(numero)
+      setCopiado(true)
+      toast.success('Número de cliente copiado')
+      window.setTimeout(() => setCopiado(false), 2000)
+    } catch {
+      toast.error('No se pudo copiar')
+    }
+  }
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <span className="text-sm text-muted">No. de cliente</span>
+      <span className="font-mono text-[17px] font-bold tracking-wide tabular-nums">{numero}</span>
+      <button
+        type="button"
+        onClick={copiar}
+        aria-label="Copiar número de cliente"
+        className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-soft hover:text-fg"
+      >
+        {copiado ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+      </button>
+    </div>
+  )
+}
 
 function DetailSkeleton() {
   return (
@@ -81,7 +111,7 @@ export function ClienteDetallePage() {
 
   return (
     <div className="pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
-      <TopBar title={cliente.nombre} subtitle={cliente.codigo ? `Código ${cliente.codigo}` : 'Detalle del cliente'} backTo="/" />
+      <TopBar title={cliente.nombre} subtitle={cliente.codigo ? `No. de cliente ${cliente.codigo}` : 'Detalle del cliente'} backTo="/" />
 
       <div className="mx-auto max-w-3xl space-y-4 px-4 pt-4 sm:px-6">
         {/* Mini mapa */}
@@ -113,6 +143,7 @@ export function ClienteDetallePage() {
             <div className="min-w-0 flex-1">
               <h2 className="text-xl leading-snug font-bold tracking-tight">{cliente.nombre}</h2>
               {cliente.direccion && <p className="mt-0.5 text-sm text-muted">{cliente.direccion}</p>}
+              {cliente.codigo && <NumeroCliente numero={cliente.codigo} />}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {cliente.visitado ? (
                   <Badge tone="success" icon={<CircleCheck className="size-3" />}>
@@ -123,7 +154,6 @@ export function ClienteDetallePage() {
                 ) : (
                   <Badge tone="danger">Pendiente</Badge>
                 )}
-                {cliente.codigo && <Badge>#{cliente.codigo}</Badge>}
               </div>
             </div>
           </div>

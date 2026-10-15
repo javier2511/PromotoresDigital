@@ -64,6 +64,7 @@ function SelectedCard({ cliente, onClose }: { cliente: ClienteConDistancia; onCl
               </Badge>
             )}
             {cliente.visitado ? <Badge tone="success">Visitado</Badge> : <Badge tone="danger">Pendiente</Badge>}
+            {cliente.codigo && <Badge>#{cliente.codigo}</Badge>}
           </div>
         </div>
         <button
