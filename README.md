@@ -74,16 +74,15 @@ En Supabase → **Authentication → Sign In / Providers**:
 Al entrar por primera vez, la app agrega al promotor en tu tabla de usuarios (`usuarios`/`perfiles`…) con su
 id, correo y nombre, como hacía el registro de FlutterFlow (si tus políticas RLS lo permiten). Después tú le
 asignas clientes desde Supabase. **¿Olvidaste tu contraseña?** (requiere ejecutar `supabase/08_restablecer_contrasena.sql`): el promotor escribe
-su correo, confirma, y su contraseña pasa a ser la temporal `coca1234`; al entrar con ella la app no lo deja
-seguir hasta que elija una nueva (distinta de la temporal). Solo funciona con promotores activos (no con
+su correo, confirma, y su contraseña pasa a ser la temporal definida en ese SQL. La app no la muestra: tú se la
+comunicas por otro medio. Al entrar con ella la app no lo deja seguir hasta que elija una nueva. Solo funciona con promotores activos (no con
 administradores), una vez cada 10 minutos por cuenta, y cada restablecimiento queda en la tabla
 `restablecimientos_contrasena`. **Riesgo aceptado:** no se verifica quién lo pide, así que cualquiera que conozca el
 correo de un promotor podría restablecerlo y entrar con la temporal antes que él. Para quitar la opción:
 `drop function public.restablecer_contrasena_temporal(text);` (el botón avisará que no está activada).
 
-Lo mismo pasa si alguien entra con `coca1234` porque tú se la pusiste, o si su cuenta tiene
-`debe_cambiar_contrasena: true` en *User Metadata*: se le pide elegir una nueva. La temporal está en
-`CONTRASENA_TEMPORAL` (`src/config/app.ts`) y en el SQL 08; si la cambias, cámbiala en ambos.
+Lo que hace que se le pida una contraseña nueva es `debe_cambiar_contrasena: true` en su *User Metadata* (lo pone
+la función del SQL 08; si restableces a mano, agrégalo tú). La contraseña temporal solo está en el SQL 08.
 
 ## Primer uso: verificar que lee bien tu base de datos
 

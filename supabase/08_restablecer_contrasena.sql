@@ -2,7 +2,8 @@
 -- RESTABLECER CONTRASEÑA DESDE LA PANTALLA DE INICIO (contraseña temporal)
 --
 -- En "¿Olvidaste tu contraseña?" el promotor escribe su correo y acepta; su contraseña pasa a ser
--- la temporal  coca1234  y, al entrar con ella, la app le pide elegir una nueva.
+-- la temporal  coca1234  y, al entrar con ella, la app le pide elegir una nueva. La app NO muestra la
+-- temporal: tú se la comunicas al promotor por otro medio. Solo vive en este archivo.
 --
 -- RIESGO ACEPTADO: no se verifica quién lo pide. Cualquiera que conozca el correo de un promotor puede
 -- restablecer su contraseña y entrar con la temporal antes que él. Para reducirlo:
@@ -11,7 +12,7 @@
 --   · Cada restablecimiento queda registrado en la tabla "restablecimientos_contrasena".
 -- Para quitar la opción en cualquier momento: ver el final del archivo.
 --
--- Si cambias la contraseña temporal aquí, cámbiala también en src/config/app.ts (CONTRASENA_TEMPORAL).
+-- Para usar otra contraseña temporal, cámbiala abajo ('coca1234') y vuelve a ejecutar el archivo.
 -- Se puede ejecutar más de una vez. Supabase → SQL Editor → New query → pega esto → Run.
 -- =============================================================================
 create extension if not exists pgcrypto with schema extensions;

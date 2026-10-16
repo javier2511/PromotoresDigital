@@ -27,10 +27,4 @@ export const DEFAULT_CENTER: [number, number] = [-99.1332, 19.4326]
 /** Un borrador de visita sin terminar se descarta pasado este tiempo. */
 export const DRAFT_TTL_MS = 12 * 60 * 60 * 1000
 
-/**
- * Contraseña temporal que el administrador le pone a un promotor que olvidó la suya. Si alguien entra con ella
- * (o su cuenta tiene user_metadata.debe_cambiar_contrasena = true), la app le pide elegir una nueva antes de seguir.
- */
-export const CONTRASENA_TEMPORAL = 'coca1234'
-
 export const APP_VERSION = '1.0.0'

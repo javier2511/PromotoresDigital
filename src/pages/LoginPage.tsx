@@ -6,7 +6,7 @@ import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/Dialog'
 import { TextField } from '../components/ui/TextField'
-import { APP_NAME, CONTRASENA_TEMPORAL } from '../config/app'
+import { APP_NAME } from '../config/app'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../providers/AuthProvider'
@@ -19,7 +19,7 @@ const FEATURES = [
 ]
 
 export function LoginPage() {
-  const { user, loading: authLoading, marcarContrasenaTemporal } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { request: activarUbicacion } = useGeo()
   const navigate = useNavigate()
   const location = useLocation()
@@ -52,15 +52,11 @@ export function LoginPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    // Con la contraseña temporal, al entrar se le pide elegir una nueva.
-    const temporal = password === CONTRASENA_TEMPORAL
-    marcarContrasenaTemporal(temporal ? email : null)
     const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     setLoading(false)
-    if (err) {
-      marcarContrasenaTemporal(null)
-      setError(friendlyError(err))
-    } else navigate(temporal ? '/restablecer' : from, { replace: true })
+    // Si su cuenta está marcada para cambio (contraseña temporal), RequireAuth lo lleva a elegir una nueva.
+    if (err) setError(friendlyError(err))
+    else navigate(from, { replace: true })
   }
 
   /** Pone la contraseña temporal (función de supabase/08_restablecer_contrasena.sql). */
@@ -80,8 +76,8 @@ export function LoginPage() {
     }
     if (data !== true) return setError('No encontramos una cuenta de promotor activa con ese correo.')
     cambiarModo('login')
-    setPassword(CONTRASENA_TEMPORAL)
-    setAviso(`Listo. Tu contraseña temporal es ${CONTRASENA_TEMPORAL}. Entra y elige una nueva.`)
+    // La contraseña temporal no se muestra en la app: el administrador se la comunica aparte.
+    setAviso('Listo. Tu administrador te dará la contraseña temporal; entra con ella y elige una nueva.')
   }
 
   const onRegistro = async (e: FormEvent) => {
@@ -240,9 +236,8 @@ export function LoginPage() {
               <div>
                 <h2 className="text-2xl font-bold tracking-tight">Restablecer contraseña</h2>
                 <p className="mt-1 text-sm text-muted">
-                  Escribe el correo con el que entras. Tu contraseña cambiará a la temporal{' '}
-                  <strong className="font-mono text-fg">{CONTRASENA_TEMPORAL}</strong> y al entrar te pediremos elegir
-                  una nueva.
+                  Escribe el correo con el que entras. Tu contraseña cambiará a una temporal que te dará tu
+                  administrador; al entrar con ella te pediremos elegir una nueva.
                 </p>
               </div>
               {campoCorreo}
@@ -334,9 +329,8 @@ export function LoginPage() {
         onCancel={() => setConfirmarRestablecer(false)}
         onConfirm={() => void restablecer()}
       >
-        La contraseña de <strong className="text-fg">{email.trim()}</strong> cambiará a{' '}
-        <strong className="font-mono text-fg">{CONTRASENA_TEMPORAL}</strong> y la actual dejará de funcionar. Al entrar te
-        pediremos elegir una nueva.
+        La contraseña actual de <strong className="text-fg">{email.trim()}</strong> dejará de funcionar y cambiará a una
+        temporal que te dará tu administrador. Al entrar te pediremos elegir una nueva.
       </ConfirmDialog>
     </div>
   )

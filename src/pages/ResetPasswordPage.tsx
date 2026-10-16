@@ -9,11 +9,10 @@ import { FullScreenLoader } from '../components/ui/Spinner'
 import { TextField } from '../components/ui/TextField'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
-import { CONTRASENA_TEMPORAL } from '../config/app'
 import { useAuth } from '../providers/AuthProvider'
 
 export function ResetPasswordPage() {
-  const { user, loading: authLoading, finishRecovery, debeCambiarContrasena, contrasenaCambiada, signOut } = useAuth()
+  const { user, loading: authLoading, finishRecovery, debeCambiarContrasena, signOut } = useAuth()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -26,13 +25,11 @@ export function ResetPasswordPage() {
     e.preventDefault()
     if (password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
     if (password !== confirm) return setError('Las contraseñas no coinciden.')
-    if (password === CONTRASENA_TEMPORAL) return setError('Elige una contraseña distinta de la temporal.')
     setError(null)
     setLoading(true)
     const { error: err } = await supabase.auth.updateUser({ password, data: { debe_cambiar_contrasena: false } })
     setLoading(false)
     if (err) return setError(friendlyError(err))
-    contrasenaCambiada()
     finishRecovery()
     toast.success('Contraseña actualizada')
     navigate('/', { replace: true })
