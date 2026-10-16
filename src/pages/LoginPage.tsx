@@ -1,9 +1,10 @@
-import { ArrowLeft, ChartColumn, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, MapPinned, ShieldCheck, User } from 'lucide-react'
+import { ArrowLeft, ChartColumn, CircleCheck, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, MapPinned, ShieldCheck, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 import { LogoMark } from '../components/Logo'
 import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
+import { ConfirmDialog } from '../components/ui/Dialog'
 import { TextField } from '../components/ui/TextField'
 import { APP_NAME, CONTRASENA_TEMPORAL } from '../config/app'
 import { friendlyError } from '../lib/errors'
@@ -24,7 +25,7 @@ export function LoginPage() {
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
-  const [mode, setMode] = useState<'login' | 'registro'>('login')
+  const [mode, setMode] = useState<'login' | 'registro' | 'restablecer'>('login')
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -33,12 +34,15 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendienteConfirmar, setPendienteConfirmar] = useState(false)
+  const [confirmarRestablecer, setConfirmarRestablecer] = useState(false)
+  const [aviso, setAviso] = useState<string | null>(null)
 
   if (!authLoading && user) return <Navigate to={from} replace />
 
-  const cambiarModo = (nuevo: 'login' | 'registro') => {
+  const cambiarModo = (nuevo: 'login' | 'registro' | 'restablecer') => {
     setMode(nuevo)
     setError(null)
+    setAviso(null)
     setPendienteConfirmar(false)
     setPassword('')
     setConfirmacion('')
@@ -57,6 +61,27 @@ export function LoginPage() {
       marcarContrasenaTemporal(null)
       setError(friendlyError(err))
     } else navigate(temporal ? '/restablecer' : from, { replace: true })
+  }
+
+  /** Pone la contraseña temporal (función de supabase/08_restablecer_contrasena.sql). */
+  const restablecer = async () => {
+    setConfirmarRestablecer(false)
+    setError(null)
+    setLoading(true)
+    const { data, error: err } = await supabase.rpc('restablecer_contrasena_temporal', { p_correo: email.trim() })
+    setLoading(false)
+    if (err) {
+      const faltaFuncion = err.code === 'PGRST202' || /could not find the function/i.test(err.message)
+      return setError(
+        faltaFuncion
+          ? 'Esta opción aún no está activada. Pide a tu administrador que restablezca tu contraseña.'
+          : friendlyError(err),
+      )
+    }
+    if (data !== true) return setError('No encontramos una cuenta de promotor activa con ese correo.')
+    cambiarModo('login')
+    setPassword(CONTRASENA_TEMPORAL)
+    setAviso(`Listo. Tu contraseña temporal es ${CONTRASENA_TEMPORAL}. Entra y elige una nueva.`)
   }
 
   const onRegistro = async (e: FormEvent) => {
@@ -167,6 +192,20 @@ export function LoginPage() {
                 required
                 trailing={verContrasena}
               />
+              <div className="-mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => cambiarModo('restablecer')}
+                  className="text-sm font-semibold text-brand-600 hover:underline dark:text-brand-300"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+              {aviso && (
+                <Alert tone="success" icon={<CircleCheck />}>
+                  {aviso}
+                </Alert>
+              )}
               {error && <Alert>{error}</Alert>}
               <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email || !password}>
                 Ingresar
@@ -181,6 +220,36 @@ export function LoginPage() {
                   Crear cuenta
                 </button>
               </p>
+            </form>
+          ) : mode === 'restablecer' ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                setConfirmarRestablecer(true)
+              }}
+              className="space-y-4"
+              noValidate
+            >
+              <button
+                type="button"
+                onClick={() => cambiarModo('login')}
+                className="-ml-1 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-fg"
+              >
+                <ArrowLeft className="size-4" /> Volver
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Restablecer contraseña</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Escribe el correo con el que entras. Tu contraseña cambiará a la temporal{' '}
+                  <strong className="font-mono text-fg">{CONTRASENA_TEMPORAL}</strong> y al entrar te pediremos elegir
+                  una nueva.
+                </p>
+              </div>
+              {campoCorreo}
+              {error && <Alert>{error}</Alert>}
+              <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email}>
+                Restablecer contraseña
+              </Button>
             </form>
           ) : pendienteConfirmar ? (
             <div className="flex flex-col items-center gap-3 py-4 text-center">
@@ -257,6 +326,18 @@ export function LoginPage() {
           {APP_NAME} · Uso interno
         </p>
       </section>
+
+      <ConfirmDialog
+        open={confirmarRestablecer}
+        title="¿Restablecer tu contraseña?"
+        confirmLabel="Sí, restablecer"
+        onCancel={() => setConfirmarRestablecer(false)}
+        onConfirm={() => void restablecer()}
+      >
+        La contraseña de <strong className="text-fg">{email.trim()}</strong> cambiará a{' '}
+        <strong className="font-mono text-fg">{CONTRASENA_TEMPORAL}</strong> y la actual dejará de funcionar. Al entrar te
+        pediremos elegir una nueva.
+      </ConfirmDialog>
     </div>
   )
 }
