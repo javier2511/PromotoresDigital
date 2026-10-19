@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js'
 import { isNetworkError } from '../lib/errors'
 import { ownerCandidates, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
+import { toBoolean } from '../lib/text'
 import { fetchAll } from './clientes'
 
 export interface Resultados {
@@ -52,4 +53,27 @@ export async function fetchResultados(
   }
   // Sin columna de usuario ni de cliente: se muestra lo que las políticas RLS permitan ver.
   return { table, rows: rows.slice(0, MAX_ROWS), filtro: 'ninguno' }
+}
+
+export interface Resumen {
+  visitados: number
+  /** Clientes con el indicador en Sí (null si la tabla no tiene esa columna). */
+  conIndicador: number | null
+}
+
+/**
+ * Clientes distintos en los resultados y cuántos tienen el indicador (p. ej. digital_post_visita) en Sí.
+ * Si un cliente aparece varias veces cuenta su registro más reciente (las filas llegan de la más nueva a la más vieja).
+ */
+export function resumirResultados(rows: Row[], cliente: string | undefined, indicador: string | undefined): Resumen {
+  const porCliente = new Map<string, Row>()
+  rows.forEach((row, i) => {
+    const key = cliente && row[cliente] !== null && row[cliente] !== undefined ? String(row[cliente]) : `#${i}`
+    if (!porCliente.has(key)) porCliente.set(key, row)
+  })
+  const ultimos = [...porCliente.values()]
+  return {
+    visitados: ultimos.length,
+    conIndicador: indicador ? ultimos.filter((r) => toBoolean(r[indicador]) === true).length : null,
+  }
 }

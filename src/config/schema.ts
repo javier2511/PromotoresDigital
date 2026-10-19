@@ -102,7 +102,7 @@ export type RespuestaField =
   | 'usuario'
   | 'fecha'
 
-export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha'
+export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha' | 'indicador'
 
 export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion'
 
@@ -350,6 +350,8 @@ export const schema: Schema = {
       cliente: ['cliente_id', 'id_cliente'],
       titulo: ['titulo', 'indicador', 'concepto', 'kpi', 'metrica', 'nombre', 'descripcion'],
       fecha: ['fecha', 'fecha_visita', 'periodo', 'mes', 'semana', 'fecha_actualizacion', 'created_at'],
+      // Sí/No que se resume arriba de Resultados (cuántos clientes y qué porcentaje). Ver ETIQUETA_INDICADOR.
+      indicador: ['digital_post_visita', 'digital', 'es_digital'],
     },
     required: [],
   },
@@ -523,6 +525,9 @@ export const INFO_CLIENTE: CampoInfoCliente[] = [
 
 /** Título del grupo de datos tipo 'metrica'. */
 export const TITULO_METRICAS = 'Últimos 3 meses'
+
+/** Nombre del indicador Sí/No del resumen de Resultados (columna `indicador` de la tabla de resultados). */
+export const ETIQUETA_INDICADOR = 'Digital post visita'
 
 /** Etiquetas bonitas para columnas en Resultados (opcional). Ej.: { ventas_mes: 'Ventas del mes' } */
 export const ETIQUETAS: Record<string, string> = {}

@@ -16,7 +16,7 @@ Reemplaza la versión de FlutterFlow **usando la misma base de datos de Supabase
 | **Ficha del cliente** | Mini mapa con la distancia, botones a Google Maps, Waze y llamada, y la información que tenías en FlutterFlow: saldo de puntos, status autogestión, Premia, cuponera, canal y canjes / promos / lotería / retos de los últimos 3 meses. |
 | **Visita** | Se puede iniciar desde cualquier lugar. Al iniciarla se guarda la ubicación del promotor y su distancia al cliente; si está a más de `VITE_RADIO_VISITA_M` metros (100 por defecto) se le avisa a cuánto está y debe confirmar. Preguntas Sí/No, opción única, múltiple, número, fecha y texto; reglas de `preguntas_reglas`; borrador guardado en el teléfono (no se pierde si se cierra la app o se va la señal). |
 | **Visita finalizada** | Avance actualizado y el siguiente cliente más cercano. |
-| **Resultados** | La tabla de resultados que cargas tú, filtrada al promotor. |
+| **Resultados** | La tabla de resultados que cargas tú, filtrada al promotor. Arriba, un resumen: clientes visitados (distintos) y cuántos tienen `digital_post_visita` en Sí, en número y porcentaje (si un cliente aparece varias veces cuenta su registro más reciente). |
 | **Perfil** | Datos del usuario, estado del GPS, "Verificar conexión" (diagnóstico de tablas y columnas) y cerrar sesión (también en el encabezado de Clientes y, en computadora, en la barra lateral). |
 
 También funciona en modo oscuro, en computadora y se puede **instalar en el teléfono** como app

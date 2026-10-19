@@ -84,6 +84,7 @@ const CAMPOS: Record<string, string> = {
   respuesta: 'Respuesta',
   fecha: 'Fecha',
   titulo: 'Título',
+  indicador: 'Indicador del resumen (Sí/No)',
   authId: 'Id de usuario (auth)',
   email: 'Correo',
 }

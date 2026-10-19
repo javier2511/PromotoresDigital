@@ -1,4 +1,4 @@
-import { ChartColumn, RefreshCw, Search, X } from 'lucide-react'
+import { ChartColumn, RefreshCw, Search, Smartphone, Store, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ErrorState } from '../components/ErrorState'
 import { PageTitle } from '../components/PageHeader'
@@ -7,7 +7,9 @@ import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
 import { useClientes, useResultados } from '../data/hooks'
+import { resumirResultados, type Resumen } from '../data/resultados'
 import type { Row } from '../lib/supabase'
+import { ETIQUETA_INDICADOR } from '../config/schema'
 import { formatValue, humanize, isNumeric, normalize } from '../lib/text'
 
 const OCULTAS = /^(id|uuid|created_at|updated_at|inserted_at|modified_at)$/i
@@ -42,6 +44,46 @@ function Valor({ column, value }: { column: string; value: unknown }) {
   return <p className="text-sm font-medium break-words">{formatValue(value)}</p>
 }
 
+function ResumenCard({ resumen }: { resumen: Resumen }) {
+  const { visitados, conIndicador } = resumen
+  const pct = conIndicador !== null && visitados > 0 ? Math.round((conIndicador / visitados) * 100) : null
+  return (
+    <Card className="mt-5 grid grid-cols-2 divide-x divide-line overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <Store className="size-4" /> Clientes visitados
+        </div>
+        <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums">{formatValue(visitados)}</p>
+      </div>
+      {conIndicador !== null && pct !== null ? (
+        <div className="p-4">
+          <div className="flex items-center gap-2 text-sm text-muted">
+            <Smartphone className="size-4" /> {ETIQUETA_INDICADOR}
+          </div>
+          <p className="mt-1 flex items-baseline gap-2">
+            <span className="text-3xl font-bold tracking-tight text-brand-600 tabular-nums dark:text-brand-400">{pct}%</span>
+            <span className="text-sm text-muted tabular-nums">
+              {formatValue(conIndicador)} de {formatValue(visitados)}
+            </span>
+          </p>
+          <div
+            className="mt-2 h-2 overflow-hidden rounded-full bg-soft"
+            role="progressbar"
+            aria-label={`${ETIQUETA_INDICADOR}: ${pct}%`}
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 text-sm text-muted">Sin columna de {ETIQUETA_INDICADOR.toLowerCase()} en la tabla de resultados.</div>
+      )}
+    </Card>
+  )
+}
+
 export function ResultadosPage() {
   const { clientes, ctx, error: clientesError } = useClientes()
   const clienteKeys = useMemo(() => (clientes ? new Set(clientes.map((c) => c.key)) : undefined), [clientes])
@@ -68,6 +110,12 @@ export function ResultadosPage() {
     })
   }, [resultados, ctx, clientes])
 
+  const resumen = useMemo(() => {
+    if (!resultados || !ctx || resultados.rows.length === 0) return null
+    const cols = ctx.tables.resultados.columns
+    return resumirResultados(resultados.rows, cols.cliente, cols.indicador)
+  }, [resultados, ctx])
+
   const term = normalize(q)
   const visibles = term ? tarjetas.filter((t) => t.texto.includes(term)) : tarjetas
   const anyError = clientesError ?? error
@@ -88,6 +136,8 @@ export function ResultadosPage() {
           </button>
         }
       />
+
+      {resumen && !anyError && <ResumenCard resumen={resumen} />}
 
       {tarjetas.length > 3 && (
         <label className="mt-5 flex h-11 items-center gap-2 rounded-xl border border-line bg-card px-3 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15">
