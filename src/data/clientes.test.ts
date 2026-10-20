@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { fetchAll, isVisitedValue, visitadoValue, type Cliente } from './clientes'
+import type { SchemaContext } from '../lib/schema-resolver'
+import { columnaReseteado, fetchAll, isVisitedValue, visitadoValue, type Cliente } from './clientes'
 
 /** Simula una consulta paginada de PostgREST con un límite de filas por respuesta. */
 function fakeQuery(total: number, maxRows: number, withCount = true) {
@@ -49,5 +50,17 @@ describe('visitado', () => {
     expect(visitadoValue([c('Pendiente')], 'visitado', 'visitado')).toBe('visitado')
     expect(visitadoValue([c(0)], 'visitado', 'visitado')).toBe(1)
     expect(visitadoValue([c(null)], 'visitado', 'visitado')).toBe(true)
+  })
+})
+
+const ctx = (columns: Record<string, string>) => ({ tables: { clientes: { columns } } }) as unknown as SchemaContext
+
+describe('columna reseteado', () => {
+  it('usa la del mapeo si existe', () => {
+    expect(columnaReseteado(ctx({ id: 'id_cliente', reseteado: 'reseteado' }), ['id_cliente', 'reseteado'])).toBe('reseteado')
+  })
+  it('si no, cualquiera que contenga "reset"', () => {
+    expect(columnaReseteado(ctx({ id: 'id_cliente' }), ['id_cliente', 'nombre_cliente', 'Reseteo_Premia'])).toBe('Reseteo_Premia')
+    expect(columnaReseteado(ctx({ id: 'id_cliente' }), ['id_cliente', 'nombre_cliente'])).toBeUndefined()
   })
 })

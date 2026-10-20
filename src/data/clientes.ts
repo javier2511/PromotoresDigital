@@ -108,7 +108,7 @@ function toCliente(row: Row, ctx: SchemaContext, visitedIds: Set<string> | null)
     codigo: text(c.codigo ? row[c.codigo] : null) ?? (c.id && !['id', 'uuid'].includes(c.id) ? key : null),
     location,
     visitado,
-    reseteado: c.reseteado ? toBoolean(esVacio(row[c.reseteado]) ? false : row[c.reseteado]) === true : null,
+    reseteado: null,
     saldo: null,
     dias: c.diaVisita ? diasDe(row[c.diaVisita]) : [],
     asignacion: null,
@@ -188,16 +188,33 @@ async function fetchClientesPorLlave(ctx: SchemaContext, llaves: string[]): Prom
   return partes.flat()
 }
 
-/** Llena el saldo con la misma columna que la ficha muestra como dato destacado (INFO_CLIENTE). */
-function conSaldo(clientes: Cliente[], ctx: SchemaContext): Cliente[] {
+/** Columna "reseteado": la del mapeo o, si no, cualquiera cuyo nombre contenga "reset" (reseteo, reset_app…). */
+export function columnaReseteado(ctx: SchemaContext, columnas: string[]): string | undefined {
+  const c = ctx.tables.clientes.columns
+  if (c.reseteado) return c.reseteado
+  const usadas = new Set(Object.values(c))
+  return columnas.find((col) => !usadas.has(col) && /reset/i.test(col))
+}
+
+/**
+ * Datos que dependen de las columnas reales de la tabla: el saldo (la misma columna que la ficha muestra como
+ * dato destacado) y "reseteado" (Sí/No; vacío = false).
+ */
+function conExtras(clientes: Cliente[], ctx: SchemaContext): Cliente[] {
   if (clientes.length === 0) return clientes
   const columnas = [...new Set(clientes.flatMap((c) => Object.keys(c.raw)))]
-  const col = resolverInfoCliente(columnas, columnasInternas(ctx)).find((c) => c.tipo === 'destacado')?.columna
-  return col ? clientes.map((c) => ({ ...c, saldo: c.raw[col] ?? null })) : clientes
+  const colSaldo = resolverInfoCliente(columnas, columnasInternas(ctx)).find((c) => c.tipo === 'destacado')?.columna
+  const colReseteado = columnaReseteado(ctx, columnas)
+  if (!colSaldo && !colReseteado) return clientes
+  return clientes.map((c) => ({
+    ...c,
+    saldo: colSaldo ? (c.raw[colSaldo] ?? null) : null,
+    reseteado: colReseteado ? !esVacio(c.raw[colReseteado]) && toBoolean(c.raw[colReseteado]) === true : null,
+  }))
 }
 
 export async function fetchClientes(ctx: SchemaContext, user: User): Promise<Cliente[]> {
-  return conSaldo(await fetchClientesSinSaldo(ctx, user), ctx)
+  return conExtras(await fetchClientesSinSaldo(ctx, user), ctx)
 }
 
 async function fetchClientesSinSaldo(ctx: SchemaContext, user: User): Promise<Cliente[]> {

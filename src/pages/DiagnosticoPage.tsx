@@ -11,6 +11,7 @@ import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { Skeleton } from '../components/ui/Skeleton'
 import { schema, VALOR_ASIGNACION_COMPLETADA, type Schema } from '../config/schema'
+import { columnaReseteado } from '../data/clientes'
 import type { Formulario } from '../data/formulario'
 import { queryKeys, useClientes, useFormulario, useSchema } from '../data/hooks'
 import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
@@ -399,6 +400,20 @@ export function DiagnosticoPage() {
                 <strong className="text-fg">{formulario?.questions.length ?? '…'}</strong> · reglas:{' '}
                 <strong className="text-fg">{formulario?.rules.length ?? '…'}</strong>
               </p>
+              {(() => {
+                const columnas = ctx.tables.clientes.allColumns ?? (clientes?.[0] ? Object.keys(clientes[0].raw) : [])
+                const col = columnaReseteado(ctx, columnas)
+                return (
+                  <p className="text-muted">
+                    "Reseteado" debajo del nombre:{' '}
+                    {col ? (
+                      <code className="rounded bg-soft px-1 font-mono text-fg">{col}</code>
+                    ) : (
+                      'no se encontró una columna con "reset" en clientes (se muestra la dirección)'
+                    )}
+                  </p>
+                )
+              })()}
               <UbicacionPerfil ctx={ctx} />
             </Card>
             {formulario && <ReglasCard formulario={formulario} />}
