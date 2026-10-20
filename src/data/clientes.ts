@@ -6,7 +6,7 @@ import { recentlyFinished } from '../lib/draft'
 import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
 import { likeExact, ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
-import { normalize, toBoolean } from '../lib/text'
+import { esVacio, normalize, toBoolean } from '../lib/text'
 
 /** Asignación del cliente al promotor (tabla asignaciones), si existe. */
 export interface Asignacion {
@@ -85,9 +85,7 @@ export function isVisitedValue(value: unknown): boolean {
 }
 
 function text(value: unknown): string | null {
-  if (value === null || value === undefined) return null
-  const s = String(value).trim()
-  return s ? s : null
+  return esVacio(value) ? null : String(value).trim()
 }
 
 function toCliente(row: Row, ctx: SchemaContext, visitedIds: Set<string> | null): Cliente {

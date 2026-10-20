@@ -97,8 +97,19 @@ const numberFormat = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?$/
 
 /** Formatea cualquier valor de una celda para mostrarlo. */
+/** Textos que en realidad significan "sin dato" (p. ej. "null" que quedó escrito al importar un CSV). */
+const VACIOS = new Set(['null', 'undefined', 'nan', 'none', 'n/a', '#n/a'])
+
+/** ¿El valor está vacío? null, "", espacios o textos como "null" / "NULL" / "#N/A". */
+export function esVacio(value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value !== 'string') return false
+  const t = value.trim()
+  return t === '' || VACIOS.has(t.toLowerCase())
+}
+
 export function formatValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—'
+  if (esVacio(value)) return '—'
   if (typeof value === 'boolean') return value ? 'Sí' : 'No'
   if (typeof value === 'number') return numberFormat.format(value)
   if (Array.isArray(value)) return value.map(formatValue).join(', ')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatValue, humanize, initials, normalize, toBoolean } from './text'
+import { esVacio, formatValue, humanize, initials, normalize, toBoolean } from './text'
 
 describe('text', () => {
   it('normaliza acentos, mayúsculas y espacios', () => {
@@ -31,5 +31,19 @@ describe('text', () => {
     expect(formatValue(null)).toBe('—')
     expect(formatValue(1234.5)).toBe('1,234.5')
     expect(formatValue('2026-10-14')).toMatch(/14 oct 2026/)
+  })
+})
+
+describe('esVacio', () => {
+  it('trata "null" escrito como texto como vacío', () => {
+    expect(esVacio('null')).toBe(true)
+    expect(esVacio(' NULL ')).toBe(true)
+    expect(esVacio('#N/A')).toBe(true)
+    expect(esVacio('')).toBe(true)
+    expect(esVacio(null)).toBe(true)
+    expect(esVacio(0)).toBe(false)
+    expect(esVacio(false)).toBe(false)
+    expect(esVacio('Av. Juárez 10')).toBe(false)
+    expect(formatValue('null')).toBe('—')
   })
 })

@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import type { ClienteConDistancia } from '../data/hooks'
 import { DIAS, diaHoy } from '../lib/dias'
 import { formatDistance } from '../lib/geo'
-import { formatValue, isNumeric } from '../lib/text'
+import { esVacio, formatValue, isNumeric } from '../lib/text'
 import { ClienteAvatar } from './ClienteAvatar'
 import { Badge } from './ui/Badge'
 import { cn } from './ui/cn'
@@ -60,7 +60,7 @@ export function ClienteCard({
               {cliente.dias.map((d) => DIAS[d - 1].corto).join(' · ')}
             </Badge>
           )}
-          {cliente.saldo !== null && cliente.saldo !== undefined && cliente.saldo !== '' && (
+          {!esVacio(cliente.saldo) && (
             <Badge icon={<Coins className="size-3" />}>
               Saldo: {formatValue(isNumeric(cliente.saldo) ? Number(cliente.saldo) : cliente.saldo)}
             </Badge>

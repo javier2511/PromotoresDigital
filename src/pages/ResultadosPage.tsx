@@ -10,7 +10,7 @@ import { useClientes, useResultados } from '../data/hooks'
 import { resumirResultados, type Resumen } from '../data/resultados'
 import type { Row } from '../lib/supabase'
 import { ETIQUETA_INDICADOR } from '../config/schema'
-import { formatValue, humanize, isNumeric, normalize } from '../lib/text'
+import { esVacio, formatValue, humanize, isNumeric, normalize } from '../lib/text'
 
 const OCULTAS = /^(id|uuid|created_at|updated_at|inserted_at|modified_at)$/i
 const PORCENTAJE = /porc|pct|percent|cumpl|avance|efectiv|logro/i
@@ -102,7 +102,7 @@ export function ResultadosPage() {
         `Registro ${i + 1}`
       const usadas = new Set([cols.usuario, cliente ? cols.cliente : undefined, cols.titulo, cols.fecha].filter(Boolean))
       const campos = Object.entries(row)
-        .filter(([column, value]) => !usadas.has(column) && !OCULTAS.test(column) && value !== null && value !== '')
+        .filter(([column, value]) => !usadas.has(column) && !OCULTAS.test(column) && !esVacio(value))
         .map(([column, value]) => ({ column, label: humanize(column), value }))
       const fecha = cols.fecha && row[cols.fecha] ? formatValue(row[cols.fecha]) : null
       const texto = normalize([titulo, fecha, ...campos.map((c) => formatValue(c.value))].join(' '))
