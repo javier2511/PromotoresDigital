@@ -20,7 +20,7 @@ import { borrarVisita, finalizarVisita } from '../data/visitas'
 import { clearDraft, loadDraft, rememberFinished, saveDraft, type VisitDraft } from '../lib/draft'
 import { detalleDeError, friendlyError, guardarUltimoError, isNetworkError, textoDetalle, type DetalleError } from '../lib/errors'
 import { formatDistance } from '../lib/geo'
-import { isAnswered, type AnswerValue } from '../lib/questions'
+import { isAnswered, type AnswerValue, type Answers } from '../lib/questions'
 import { visibleQuestions } from '../lib/rules'
 import { useUser } from '../providers/AuthProvider'
 
@@ -149,7 +149,17 @@ export function VisitaPage() {
 
   const setAnswer = (key: string, value: AnswerValue) => {
     if (highlight === key) setHighlight(null)
-    setDraft((prev) => (prev ? { ...prev, answers: { ...prev.answers, [key]: value } } : prev))
+    setDraft((prev) => {
+      if (!prev) return prev
+      const next: Answers = { ...prev.answers, [key]: value }
+      // Las preguntas que quedan ocultas pierden su respuesta: si vuelven a aparecer (por otra ruta del
+      // flujo), salen sin nada elegido y el promotor tiene que contestarlas de nuevo.
+      if (formulario) {
+        const visibles = visibleQuestions(formulario.questions, formulario.rules, next)
+        for (const k of Object.keys(next)) if (!visibles.has(k)) delete next[k]
+      }
+      return { ...prev, answers: next }
+    })
   }
 
   const onFinish = () => {
