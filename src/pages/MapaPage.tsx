@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { ClienteAvatar } from '../components/ClienteAvatar'
 import { ErrorState } from '../components/ErrorState'
 import { Reseteado } from '../components/Reseteado'
+import { SaldoBadge } from '../components/SaldoBadge'
 import { FiltroDias } from '../components/FiltroDias'
 import { filtrarPorDia, useFiltroDia } from '../lib/filtro-dia'
 import { LocationBanner } from '../components/LocationBanner'
@@ -69,6 +70,7 @@ function SelectedCard({ cliente, onClose }: { cliente: ClienteConDistancia; onCl
               </Badge>
             )}
             {cliente.visitado ? <Badge tone="success">Visitado</Badge> : <Badge tone="danger">Pendiente</Badge>}
+            <SaldoBadge saldo={cliente.saldo} />
             {cliente.codigo && <Badge>#{cliente.codigo}</Badge>}
           </div>
         </div>

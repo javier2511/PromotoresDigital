@@ -1,11 +1,11 @@
-import { CalendarDays, ChevronRight, Coins, MapPinOff, Navigation, Timer } from 'lucide-react'
+import { CalendarDays, ChevronRight, MapPinOff, Navigation, Timer } from 'lucide-react'
 import { Link } from 'react-router'
 import type { ClienteConDistancia } from '../data/hooks'
 import { DIAS, diaHoy } from '../lib/dias'
 import { formatDistance } from '../lib/geo'
-import { esVacio, formatValue, isNumeric } from '../lib/text'
 import { ClienteAvatar } from './ClienteAvatar'
 import { Reseteado } from './Reseteado'
+import { SaldoBadge } from './SaldoBadge'
 import { Badge } from './ui/Badge'
 import { cn } from './ui/cn'
 
@@ -65,11 +65,7 @@ export function ClienteCard({
               {cliente.dias.map((d) => DIAS[d - 1].corto).join(' · ')}
             </Badge>
           )}
-          {!esVacio(cliente.saldo) && (
-            <Badge icon={<Coins className="size-3" />}>
-              Saldo: {formatValue(isNumeric(cliente.saldo) ? Number(cliente.saldo) : cliente.saldo)}
-            </Badge>
-          )}
+          <SaldoBadge saldo={cliente.saldo} />
         </div>
       </div>
       <ChevronRight className="size-5 shrink-0 text-muted" />
