@@ -5,6 +5,7 @@ import { DIAS, diaHoy } from '../lib/dias'
 import { formatDistance } from '../lib/geo'
 import { esVacio, formatValue, isNumeric } from '../lib/text'
 import { ClienteAvatar } from './ClienteAvatar'
+import { Reseteado } from './Reseteado'
 import { Badge } from './ui/Badge'
 import { cn } from './ui/cn'
 
@@ -34,7 +35,11 @@ export function ClienteCard({
         <div className="flex items-center gap-2">
           <p className="truncate text-[15px] font-semibold">{cliente.nombre}</p>
         </div>
-        {cliente.direccion && <p className="mt-0.5 truncate text-sm text-muted">{cliente.direccion}</p>}
+        {cliente.reseteado !== null ? (
+          <Reseteado valor={cliente.reseteado} className="mt-0.5" />
+        ) : (
+          cliente.direccion && <p className="mt-0.5 truncate text-sm text-muted">{cliente.direccion}</p>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {cliente.visitado ? (
             <Badge tone="success">Visitado</Badge>

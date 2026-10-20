@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { ClienteAvatar } from '../components/ClienteAvatar'
 import { ClienteInfo } from '../components/ClienteInfo'
+import { Reseteado } from '../components/Reseteado'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
 import { StartVisitButton, useVisitGate, VisitGateCard, type VisitStart } from '../components/VisitGate'
@@ -142,6 +143,7 @@ export function ClienteDetallePage() {
             <ClienteAvatar nombre={cliente.nombre} visitado={cliente.visitado} className="size-14 text-lg" />
             <div className="min-w-0 flex-1">
               <h2 className="text-xl leading-snug font-bold tracking-tight">{cliente.nombre}</h2>
+              {cliente.reseteado !== null && <Reseteado valor={cliente.reseteado} className="mt-0.5" />}
               {cliente.direccion && <p className="mt-0.5 text-sm text-muted">{cliente.direccion}</p>}
               {cliente.codigo && <NumeroCliente numero={cliente.codigo} />}
               <div className="mt-2 flex flex-wrap gap-1.5">

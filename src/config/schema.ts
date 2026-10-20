@@ -57,6 +57,7 @@ export type ClienteField =
   | 'telefono'
   | 'codigo'
   | 'diaVisita'
+  | 'reseteado'
 
 export type PreguntaField =
   | 'id'
@@ -181,6 +182,8 @@ export const schema: Schema = {
       ],
       // Día(s) de la semana en que toca visitarlo (filtro por día en la lista): "Martes", "Lun, Jue", "2"…
       diaVisita: ['dia_visita', 'dias_visita', 'dia_de_visita', 'dia_ruta', 'dia'],
+      // Sí/No que se muestra debajo del nombre ("Reseteado: Verdadero / Falso"). Vacío cuenta como Falso.
+      reseteado: ['reseteado', 'reseteada', 'esta_reseteado', 'reseteo', 'reset'],
     },
     required: ['id', 'nombre'],
   },

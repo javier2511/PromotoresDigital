@@ -181,6 +181,12 @@ guarda en la tabla `jornadas`, que se crea con `supabase/06_jornadas.sql` (cada 
 las suyas). Mientras esa tabla no exista, la tarjeta no aparece. Al final del script hay una consulta para ver las
 jornadas de todos con su duración.
 
+### Reseteado (debajo del nombre)
+
+Si la tabla de clientes tiene la columna `reseteado` (créala con `supabase/09_reseteado.sql`), debajo del nombre
+de cada cliente se ve **Reseteado: Verdadero** o **Reseteado: Falso** (vacío cuenta como Falso) en la lista, el
+detalle y el mapa. Sin esa columna se sigue mostrando la dirección.
+
 ### Información del cliente (ficha)
 
 **Día de entrega:** ejecuta `supabase/07_dia_entrega.sql` para agregar la columna `dia_entrega` a clientes y

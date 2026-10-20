@@ -25,6 +25,8 @@ export interface Cliente {
   codigo: string | null
   location: LatLng | null
   visitado: boolean
+  /** Columna "reseteado" (Sí/No; vacío = false). null si la tabla no tiene esa columna. */
+  reseteado: boolean | null
   /** Saldo de puntos (el dato "destacado" de la ficha, p. ej. saldo_premia), para mostrarlo en la lista. */
   saldo: unknown
   /** Días de la semana en que toca visitarlo (1 = lunes … 7 = domingo), de la columna dia_visita. */
@@ -106,6 +108,7 @@ function toCliente(row: Row, ctx: SchemaContext, visitedIds: Set<string> | null)
     codigo: text(c.codigo ? row[c.codigo] : null) ?? (c.id && !['id', 'uuid'].includes(c.id) ? key : null),
     location,
     visitado,
+    reseteado: c.reseteado ? toBoolean(esVacio(row[c.reseteado]) ? false : row[c.reseteado]) === true : null,
     saldo: null,
     dias: c.diaVisita ? diasDe(row[c.diaVisita]) : [],
     asignacion: null,

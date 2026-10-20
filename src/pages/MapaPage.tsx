@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { useNavigate, useSearchParams } from 'react-router'
 import { ClienteAvatar } from '../components/ClienteAvatar'
 import { ErrorState } from '../components/ErrorState'
+import { Reseteado } from '../components/Reseteado'
 import { FiltroDias } from '../components/FiltroDias'
 import { filtrarPorDia, useFiltroDia } from '../lib/filtro-dia'
 import { LocationBanner } from '../components/LocationBanner'
@@ -56,7 +57,11 @@ function SelectedCard({ cliente, onClose }: { cliente: ClienteConDistancia; onCl
         <ClienteAvatar nombre={cliente.nombre} visitado={cliente.visitado} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[16px] font-semibold">{cliente.nombre}</p>
-          {cliente.direccion && <p className="line-clamp-2 text-sm text-muted">{cliente.direccion}</p>}
+          {cliente.reseteado !== null ? (
+            <Reseteado valor={cliente.reseteado} />
+          ) : (
+            cliente.direccion && <p className="line-clamp-2 text-sm text-muted">{cliente.direccion}</p>
+          )}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {cliente.distance !== null && (
               <Badge tone={cerca ? 'success' : 'neutral'} icon={<Navigation className="size-3" />}>
