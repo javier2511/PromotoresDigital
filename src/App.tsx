@@ -15,6 +15,7 @@ import { LoginPage } from './pages/LoginPage'
 import { MapaPage } from './pages/MapaPage'
 import { NotFoundPage, RouteErrorPage } from './pages/NotFoundPage'
 import { PerfilPage } from './pages/PerfilPage'
+import { EquipoPage } from './pages/EquipoPage'
 import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { ResultadosPage } from './pages/ResultadosPage'
 import { SetupScreen } from './pages/SetupScreen'
@@ -62,6 +63,7 @@ const router = createBrowserRouter([
       { path: 'clientes/:id/visita/finalizada', element: <VisitaFinalizadaPage />, handle: hideNav },
       { path: 'resultados', element: <ResultadosPage /> },
       { path: 'perfil', element: <PerfilPage /> },
+      { path: 'equipo', element: <EquipoPage /> },
       { path: 'diagnostico', element: <DiagnosticoPage />, handle: hideNav },
       { path: '*', element: <NotFoundPage /> },
     ],

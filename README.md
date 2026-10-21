@@ -187,6 +187,16 @@ Si la tabla de clientes tiene la columna `reseteado` (créala con `supabase/09_r
 de cada cliente se ve **Reseteado: Verdadero** o **Reseteado: Falso** (vacío cuenta como Falso) en la lista, el
 detalle y el mapa. Sin esa columna se sigue mostrando la dirección.
 
+### Administradores: pestaña Equipo
+
+Los usuarios con `rol = 'admin'` en **promotores** ven, además de todo lo demás, la pestaña **Equipo**: para el día
+que elijan (hoy por defecto) cuántos promotores iniciaron y terminaron su jornada, un mapa con dónde iniciaron, y
+por cada promotor activo su hora de entrada y salida, la duración y enlaces a Google Maps con la ubicación de
+entrada y de salida. Requiere `supabase/06_jornadas.sql` y `supabase/10_admin_jornadas.sql`. Este último también
+protege la tabla promotores: cada usuario ve solo su fila (un admin, todas), nadie puede cambiarse el rol desde la
+app y al registrarse solo se puede crear la propia fila como promotor. Para hacer admin a alguien:
+`update public.promotores set rol = 'admin' where correo = 'correo@empresa.com';`
+
 ### Información del cliente (ficha)
 
 **Día de entrega:** ejecuta `supabase/07_dia_entrega.sql` para agregar la columna `dia_entrega` a clientes y

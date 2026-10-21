@@ -1,5 +1,5 @@
 import type { PostgrestError, User } from '@supabase/supabase-js'
-import { schema, type Schema, type TableSpec } from '../config/schema'
+import { ROLES_ADMIN, schema, type Schema, type TableSpec } from '../config/schema'
 import { isNetworkError } from './errors'
 import { supabase, type Row } from './supabase'
 
@@ -43,6 +43,8 @@ export interface Perfil {
   conUbicacion?: boolean
   /** Texto de la columna "ubicacion", si tiene (p. ej. "LatLng(lat: …, lng: …)" que guardaba FlutterFlow). */
   ubicacionTexto?: string | null
+  /** Columna rol (p. ej. 'promotor' o 'admin'). */
+  rol?: string | null
 }
 
 export interface SchemaContext {
@@ -205,6 +207,7 @@ async function resolvePerfil(t: ResolvedTable<FieldsOf<'perfiles'>>, user: User)
         nombre: typeof nombre === 'string' && nombre.trim() ? nombre.trim() : null,
         conUbicacion,
         ubicacionTexto: ubicacion && !vacio(ubicacion) ? String(row[ubicacion]) : null,
+        rol: t.columns.rol && !vacio(t.columns.rol) ? String(row[t.columns.rol]) : null,
       }
     }
   }
@@ -338,4 +341,10 @@ export function ownerValueFor(
   if (AUTH_ID_COLUMN.test(column)) return user.id
   if (owner?.via === 'perfil' && ctx.perfil) return ctx.perfil.id
   return user.id
+}
+
+/** ¿El usuario es administrador (rol en ROLES_ADMIN)? Solo decide qué se muestra; los permisos los da Supabase. */
+export function esAdmin(ctx: Pick<SchemaContext, 'perfil'> | undefined): boolean {
+  const rol = ctx?.perfil?.rol
+  return Boolean(rol && ROLES_ADMIN.includes(rol.trim().toLowerCase()))
 }

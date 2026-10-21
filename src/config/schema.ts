@@ -105,7 +105,7 @@ export type RespuestaField =
 
 export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha' | 'indicador'
 
-export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion'
+export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion' | 'rol' | 'activo'
 
 export type AsignacionField = 'id' | 'cliente' | 'usuario' | 'fecha' | 'orden' | 'estatus'
 
@@ -371,6 +371,9 @@ export const schema: Schema = {
       latitud: ['latitud', 'lat', 'latitud_registro'],
       longitud: ['longitud', 'lng', 'lon', 'longitud_registro'],
       ubicacion: ['ubicacion', 'ubicacion_registro', 'coordenadas'],
+      // Rol del usuario: con ROLES_ADMIN ve la pestaña "Equipo" (jornadas de todos los promotores).
+      rol: ['rol', 'role', 'tipo_usuario'],
+      activo: ['activo', 'activa', 'habilitado'],
     },
     required: ['id'],
   },
@@ -450,6 +453,10 @@ export const ESTATUS_ASIGNACION_COMPLETADA = ['completada', 'completado', 'visit
 export const ESTATUS_ASIGNACION_OCULTA = ['cancelada', 'cancelado']
 /** Valor que se escribe en asignaciones.estatus al finalizar la visita (debe estar en tu lista permitida). */
 export const VALOR_ASIGNACION_COMPLETADA = 'Completada'
+
+/** Roles (columna rol de promotores) que ven la pestaña "Equipo"; ROL_PROMOTOR son los que aparecen en ella. */
+export const ROLES_ADMIN = ['admin', 'administrador']
+export const ROL_PROMOTOR = 'promotor'
 
 /** Valores que se guardan en las preguntas Sí/No (si la pregunta no trae sus propias opciones). */
 export const RESPUESTA_SI = 'Si'

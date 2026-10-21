@@ -1,6 +1,7 @@
-import { ChartColumn, CircleUserRound, Map as MapIcon, Store, type LucideIcon } from 'lucide-react'
+import { ChartColumn, CircleUserRound, Map as MapIcon, Store, Users, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet, ScrollRestoration, useMatches } from 'react-router'
-import { useClientes } from '../data/hooks'
+import { useClientes, useSchema } from '../data/hooks'
+import { esAdmin } from '../lib/schema-resolver'
 import { useAsegurarPerfil } from '../data/perfil'
 import { useAuth } from '../providers/AuthProvider'
 import { Logo } from './Logo'
@@ -15,12 +16,17 @@ export interface RouteHandle {
   fullBleed?: boolean
 }
 
-const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
+type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean }
+
+const NAV: NavItem[] = [
   { to: '/', label: 'Clientes', icon: Store, end: true },
   { to: '/mapa', label: 'Mapa', icon: MapIcon },
   { to: '/resultados', label: 'Resultados', icon: ChartColumn },
   { to: '/perfil', label: 'Perfil', icon: CircleUserRound },
 ]
+
+/** Solo administradores (rol admin en promotores): jornadas de todo el equipo. */
+const NAV_ADMIN: NavItem = { to: '/equipo', label: 'Equipo', icon: Users }
 
 function useRouteHandle(): RouteHandle {
   const matches = useMatches()
@@ -48,7 +54,9 @@ function SidebarProgress() {
 export function AppShell() {
   const handle = useRouteHandle()
   const { user } = useAuth()
+  const { data: ctx } = useSchema()
   useAsegurarPerfil()
+  const nav = esAdmin(ctx) ? [...NAV.slice(0, 3), NAV_ADMIN, NAV[3]] : NAV
 
   return (
     <div className="min-h-dvh">
@@ -56,7 +64,7 @@ export function AppShell() {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-card px-4 py-5 lg:flex">
         <Logo className="px-2" />
         <nav className="mt-8 flex flex-col gap-1">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -98,8 +106,8 @@ export function AppShell() {
       {/* Barra inferior (móvil) */}
       {!handle.hideNav && (
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card/90 pb-safe backdrop-blur-xl lg:hidden">
-          <div className="mx-auto grid h-16 max-w-lg grid-cols-4">
-            {NAV.map(({ to, label, icon: Icon, end }) => (
+          <div className={cn('mx-auto grid h-16 max-w-lg', nav.length === 5 ? 'grid-cols-5' : 'grid-cols-4')}>
+            {nav.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}

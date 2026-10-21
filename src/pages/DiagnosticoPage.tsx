@@ -67,6 +67,8 @@ const CAMPOS: Record<string, string> = {
   realizada: 'Visita realizada',
   diaVisita: 'Día de visita',
   reseteado: 'Reseteado (Sí/No)',
+  rol: 'Rol (admin ve Equipo)',
+  activo: 'Activo',
   asignacion: 'Asignación',
   finHora: 'Hora de fin',
   checkin: 'Check-in realizado',
