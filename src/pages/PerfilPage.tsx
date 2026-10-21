@@ -6,10 +6,12 @@ import { toast } from 'sonner'
 import { LogoutButton } from '../components/LogoutButton'
 import { PageTitle } from '../components/PageHeader'
 import { Card, SectionTitle } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { APP_NAME, APP_VERSION, RADIO_VISITA_M } from '../config/app'
 import { useClientes, useSchema } from '../data/hooks'
 import { formatDistance } from '../lib/geo'
+import { esAdmin } from '../lib/schema-resolver'
 import { initials } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
 import { useGeo } from '../providers/GeoProvider'
@@ -58,6 +60,11 @@ export function PerfilPage() {
         <div className="min-w-0">
           <p className="truncate text-lg font-semibold capitalize">{nombre}</p>
           <p className="truncate text-sm text-muted">{user.email}</p>
+          {ctx?.perfil?.rol && (
+            <p className="mt-1">
+              <Badge tone={esAdmin(ctx) ? 'brand' : 'neutral'}>{esAdmin(ctx) ? 'Administrador' : ctx.perfil.rol}</Badge>
+            </p>
+          )}
         </div>
       </Card>
 
@@ -114,7 +121,7 @@ export function PerfilPage() {
       <LogoutButton className="mt-6" />
 
       <p className="mt-6 text-center text-xs text-muted">
-        {APP_NAME} · versión {APP_VERSION}
+        {APP_NAME} · versión {APP_VERSION} · {__BUILD__}
       </p>
 
     </div>

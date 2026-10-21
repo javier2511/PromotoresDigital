@@ -12,8 +12,11 @@
 --   · Nadie puede cambiar su rol desde la app (solo tú, desde Supabase).
 --   · Al registrarse, un usuario solo puede crear su propia fila como 'promotor'.
 --   · Cada usuario puede actualizar solo su nombre y su ubicación.
--- Los cambios de rol los haces tú en Table Editor o con:
---   update public.promotores set rol = 'admin' where correo = 'correo@empresa.com';
+-- Este archivo NO hace admin a nadie: el rol lo pones tú en Table Editor o con:
+--   update public.promotores set rol = 'admin', activo = true where correo = 'correo@empresa.com';
+-- Para revisar quién es admin:
+--   select id_promotor, nombre, correo, rol, activo from public.promotores where rol ilike '%admin%';
+-- Después, en la app: cierra sesión y vuelve a entrar (o ciérrala y ábrela). Aparece la pestaña "Equipo".
 --
 -- Se puede ejecutar más de una vez. Supabase → SQL Editor → New query → pega esto → Run.
 -- =============================================================================
@@ -29,7 +32,7 @@ as $$
   select exists (
     select 1 from public.promotores p
     where p.id_promotor = auth.uid()
-      and lower(coalesce(p.rol, '')) = 'admin'
+      and lower(trim(coalesce(p.rol, ''))) in ('admin', 'administrador')
       and coalesce(p.activo, true)
   );
 $$;

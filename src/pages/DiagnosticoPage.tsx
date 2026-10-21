@@ -17,7 +17,7 @@ import { queryKeys, useClientes, useFormulario, useSchema } from '../data/hooks'
 import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
 import { leerUltimoError } from '../lib/errors'
 import { describirRegla } from '../lib/rules'
-import { clearSchemaCache, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
+import { clearSchemaCache, esAdmin, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
 import { useUser } from '../providers/AuthProvider'
 import { useGeo } from '../providers/GeoProvider'
 
@@ -321,7 +321,8 @@ export function DiagnosticoPage() {
       usuario: { id: user.id, email: user.email },
       tablas: ctx?.tables,
       filtroClientes: ctx?.owner,
-      perfil: ctx?.perfil ? { encontrado: true, conUbicacion: ctx.perfil.conUbicacion ?? null } : null,
+      perfil: ctx?.perfil ? { encontrado: true, rol: ctx.perfil.rol ?? null, conUbicacion: ctx.perfil.conUbicacion ?? null } : null,
+      version: __BUILD__,
       gps: position ? { precision: Math.round(position.accuracy) } : status,
       conteos: {
         clientes: clientes?.length ?? null,
@@ -416,6 +417,17 @@ export function DiagnosticoPage() {
                   </p>
                 )
               })()}
+              <p className="text-muted">
+                Tu fila en <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.tables.perfiles.table ?? 'usuarios'}</code>:{' '}
+                {!ctx.perfil ? (
+                  <strong className="text-amber-600">no se encontró</strong>
+                ) : (
+                  <>
+                    rol <strong className="text-fg">{ctx.perfil.rol ?? '—'}</strong>
+                    {esAdmin(ctx) ? ' → ves la pestaña Equipo' : ' (para ver Equipo debe ser admin)'}
+                  </>
+                )}
+              </p>
               <UbicacionPerfil ctx={ctx} />
             </Card>
             {formulario && <ReglasCard formulario={formulario} />}

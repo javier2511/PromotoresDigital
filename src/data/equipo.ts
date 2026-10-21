@@ -65,8 +65,10 @@ export async function fetchEquipo(ctx: SchemaContext, fecha: string): Promise<Eq
   const miembros = promotores
     .filter((row) => {
       if (cp.activo && toBoolean(row[cp.activo]) === false) return false
-      // Solo los promotores (no otros administradores). Sin columna de rol: todos menos uno mismo.
-      return cp.rol ? normalize(row[cp.rol]) === ROL_PROMOTOR : String(row[cp.id!]) !== String(ctx.perfil?.id)
+      // Solo los promotores (no otros administradores); rol vacío = promotor, como al registrarse.
+      // Sin columna de rol: todos menos uno mismo.
+      if (!cp.rol) return String(row[cp.id!]) !== String(ctx.perfil?.id)
+      return esVacio(row[cp.rol]) || normalize(row[cp.rol]) === ROL_PROMOTOR
     })
     .map((row): MiembroEquipo => {
       const id = row[cp.id!] as Id
