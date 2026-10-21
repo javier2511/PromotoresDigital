@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js'
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { clearSchemaCache } from '../lib/schema-resolver'
 import { supabase } from '../lib/supabase'
 
 interface AuthState {
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
+    clearSchemaCache()
     queryClient.clear()
   }, [queryClient])
 

@@ -300,7 +300,12 @@ export function clearSchemaCache() {
 export async function loadSchema(user: User, { force = false } = {}): Promise<SchemaContext> {
   if (!force) {
     const cached = readCache(user.id)
-    if (cached) return cached
+    if (cached) {
+      // Las tablas se recuerdan una hora, pero el perfil (nombre, rol admin) se lee cada vez que se abre la app,
+      // para que un cambio de rol se vea de inmediato. Sin señal se usa el guardado.
+      const perfil = await resolvePerfil(cached.tables.perfiles, user).catch(() => cached.perfil)
+      return { ...cached, perfil }
+    }
   }
   const keys = Object.keys(schema) as TableKey[]
   const resolved = await Promise.all(keys.map((k) => resolveTable(schema[k] as TableSpec<string>)))
