@@ -104,7 +104,18 @@ export type RespuestaField =
   | 'usuario'
   | 'fecha'
 
-export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha' | 'indicador' | 'visita' | 'id' | 'actualizado'
+export type ResultadoField =
+  | 'usuario'
+  | 'cliente'
+  | 'titulo'
+  | 'fecha'
+  | 'indicador'
+  | 'visita'
+  | 'id'
+  | 'actualizado'
+  | 'minutosNuevaVisita'
+  | 'minutosVisita'
+  | 'distancia'
 
 export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion' | 'rol' | 'activo'
 
@@ -366,6 +377,40 @@ export const schema: Schema = {
       visita: ['id_visita', 'visita_id'],
       id: ['id_resultado', 'resultado_id', 'id'],
       actualizado: ['fecha_actualizacion', 'updated_at', 'actualizado_en'],
+      // Tablero: minutos y distancia que ya vienen en la tabla. Si el nombre no está aquí se busca por palabras
+      // (ver PALABRAS_TABLERO en src/data/tablero.ts); si no hay columna, se calculan con la tabla visitas.
+      minutosNuevaVisita: [
+        'tiempo_nueva_visita',
+        'tiempo_nueva_visita_min',
+        'tiempo_nueva_visita_minutos',
+        'minutos_nueva_visita',
+        'tiempo_entre_visitas',
+        'minutos_entre_visitas',
+        'tiempo_traslado',
+        'minutos_traslado',
+      ],
+      minutosVisita: [
+        'tiempo_visita',
+        'tiempo_visita_min',
+        'tiempo_visita_minutos',
+        'minutos_visita',
+        'min_visita',
+        'duracion_visita',
+        'duracion_visita_min',
+        'duracion_min',
+        'duracion_minutos',
+        'duracion',
+      ],
+      distancia: [
+        'distancia_checkin_m',
+        'distancia_checkin',
+        'distancia_check_in',
+        'distancia_check_in_m',
+        'distancia_m',
+        'distancia_metros',
+        'distancia',
+        'geoeficiencia',
+      ],
     },
     required: [],
   },
@@ -552,8 +597,10 @@ export const ETIQUETA_INDICADOR = 'Digital post visita'
 
 /**
  * TABLERO (pestaña de administradores)
- * Visitas más largas que esto no cuentan en "Tiempo visita" (quedaron abiertas y se cerraron después),
+ * Solo cuando el tablero calcula los tiempos con la tabla visitas (resultados_visitas no trae las columnas de
+ * minutos): visitas más largas que esto no cuentan en "Tiempo visita" (quedaron abiertas y se cerraron después),
  * y huecos más largos entre una visita y la siguiente no cuentan en "Tiempo nueva visita" (comida, fin de ruta).
+ * Los minutos que ya vienen en resultados_visitas se promedian tal cual.
  */
 export const MAX_DURACION_VISITA_MIN = 240
 export const MAX_TIEMPO_ENTRE_VISITAS_MIN = 240

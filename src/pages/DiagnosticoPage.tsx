@@ -92,6 +92,8 @@ const CAMPOS: Record<string, string> = {
   authId: 'Id de usuario (auth)',
   email: 'Correo',
   registro: 'Fecha de registro (día en el Tablero)',
+  minutosVisita: 'Minutos de visita (Tablero)',
+  minutosNuevaVisita: 'Minutos a la siguiente visita (Tablero)',
   actualizado: 'Fecha de actualización',
 }
 

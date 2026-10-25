@@ -3,8 +3,11 @@ import type { Row } from '../lib/supabase'
 import { rangoDe } from '../lib/periodos'
 import {
   calcularIndicadores,
+  columnasResultados,
   construirVisitas,
   instante,
+  metrosDe,
+  minutosDe,
   porBarra,
   porPromotor,
   tiemposEntreVisitas,
@@ -176,5 +179,91 @@ describe('por promotor y por barra', () => {
     expect(barras.at(-1)!.clave).toBe('19')
     expect(barras.find((b) => b.clave === '9')!.visitas).toBe(1)
     expect(barras.find((b) => b.clave === '19')!.conCompra).toBe(1)
+  })
+})
+
+describe('resultados_visitas con minutos y distancia ya calculados', () => {
+  it('encuentra las columnas por nombre exacto o por palabras', () => {
+    expect(
+      columnasResultados([
+        'id_resultado',
+        'id_visita',
+        'id_cliente',
+        'nombre_cliente',
+        'id_promotor',
+        'fecha_visita',
+        'digital_post_venta',
+        'fecha_actualizacion',
+        'tiempo_visita',
+        'tiempo_nueva_visita',
+        'distancia_checkin',
+      ]),
+    ).toMatchObject({
+      visita: 'id_visita',
+      usuario: 'id_promotor',
+      fecha: 'fecha_visita',
+      indicador: 'digital_post_venta',
+      minutosVisita: 'tiempo_visita',
+      minutosNuevaVisita: 'tiempo_nueva_visita',
+      distancia: 'distancia_checkin',
+    })
+    expect(
+      columnasResultados(['id_visita', 'id_promotor', 'fecha_visita', 'Compra Autogestionada', 'Minutos para nueva visita', 'Minutos de la visita', 'Distancia al check in km']),
+    ).toMatchObject({
+      indicador: 'Compra Autogestionada',
+      minutosVisita: 'Minutos de la visita',
+      minutosNuevaVisita: 'Minutos para nueva visita',
+      distancia: 'Distancia al check in km',
+    })
+  })
+
+  it('lee minutos (número, segundos u HH:MM:SS) y metros (o km)', () => {
+    expect(minutosDe(12.5, 'tiempo_visita')).toBe(12.5)
+    expect(minutosDe('12,5', 'tiempo_visita')).toBe(12.5)
+    expect(minutosDe('00:15:30', 'tiempo_visita')).toBe(15.5)
+    expect(minutosDe(90, 'tiempo_visita_seg')).toBe(1.5)
+    expect(minutosDe(-3, 'tiempo_visita')).toBeNull()
+    expect(minutosDe(null, 'tiempo_visita')).toBeNull()
+    expect(metrosDe(35, 'distancia_checkin')).toBe(35)
+    expect(metrosDe('1.2', 'distancia_km')).toBe(1200)
+  })
+
+  it('usa los valores de la tabla tal cual (sin calcular ni descartar) y las horas de visitas solo para el día', () => {
+    const r = (id_visita: number, digital: boolean, tiempo: unknown, nueva: unknown, distancia: unknown, fecha = '2026-10-19T10:00:00'): Row => ({
+      id_resultado: id_visita,
+      id_visita,
+      id_promotor: 'A',
+      fecha_visita: fecha,
+      digital_post_visita: digital,
+      tiempo_visita: tiempo,
+      tiempo_nueva_visita: nueva,
+      distancia_checkin: distancia,
+    })
+    const filas = [
+      r(1, true, 17, null, 45),
+      r(2, false, 300, 18, 140),
+      r(3, true, '00:12:30', 9, 75),
+      // Sin fila en visitas: su día sale de fecha_visita.
+      r(4, false, null, null, null, '2026-10-20T09:00:00'),
+    ]
+    // En visitas la visita 1 duró 15 min y la 2 empezó el 18 en México (hora con zona): manda el día de visitas.
+    const enVisitas: Row[] = [
+      { id_visita: 1, hora_inicio: '2026-10-19T16:00:00+00:00', hora_fin: '2026-10-19T16:15:00+00:00', distancia_checkin_m: 999 },
+      { id_visita: 2, hora_inicio: '2026-10-19T01:00:00+00:00', hora_fin: '2026-10-19T01:30:00+00:00' },
+    ]
+    const cols: ColumnasTablero = { ...columnas, r: columnasResultados(Object.keys(filas[0])) }
+    const lista = construirVisitas(filas, enVisitas, cols)
+    expect(lista.map((v) => [v.key, v.duracion, v.minutosNueva, v.distancia, v.dia])).toEqual([
+      ['1', 17, null, 45, '2026-10-19'],
+      ['2', 300, 18, 140, '2026-10-18'],
+      ['3', 12.5, 9, 75, '2026-10-19'],
+      ['4', null, null, null, '2026-10-20'],
+    ])
+    const ind = calcularIndicadores(lista, 100)
+    expect(ind.tiempoVisita).toEqual({ valor: (17 + 300 + 12.5) / 3, n: 3 })
+    expect(ind.tiempoVisitaConCompra).toEqual({ valor: (17 + 12.5) / 2, n: 2 })
+    expect(ind.tiempoNuevaVisita).toEqual({ valor: (18 + 9) / 2, n: 2 })
+    expect(ind.distancia).toEqual({ valor: (45 + 140 + 75) / 3, n: 3 })
+    expect(ind.dentroRadio).toBe(2)
   })
 })

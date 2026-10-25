@@ -3,16 +3,18 @@ import {
   MAX_DURACION_VISITA_MIN,
   MAX_TIEMPO_ENTRE_VISITAS_MIN,
   ROL_PROMOTOR,
+  schema,
   type ResultadoField,
   type VisitaField,
 } from '../config/schema'
+import { claveColumna } from '../lib/info-cliente'
 import { diasDelRango, isoLocal, sumarDias, type Rango } from '../lib/periodos'
-import { isMissingColumnError, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
+import { isMissingColumnError, pickColumns, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { esVacio, normalize, toBoolean } from '../lib/text'
 import { fetchAll } from './clientes'
 
-/** Una visita de resultados_visitas, con los tiempos y la distancia de su fila en visitas. */
+/** Una visita de resultados_visitas (minutos y distancia de sus columnas, o calculados con su fila en visitas). */
 export interface VisitaTablero {
   key: string
   promotor: string | null
@@ -24,10 +26,15 @@ export interface VisitaTablero {
   /** Milisegundos (null si no se conoce). */
   inicio: number | null
   fin: number | null
-  /** Minutos que duró (null si no se conoce o no es creíble: ver MAX_DURACION_VISITA_MIN). */
+  /** Minutos que duró (null si no se conoce o, calculada, no es creíble: ver MAX_DURACION_VISITA_MIN). */
   duracion: number | null
   /** Metros al cliente al hacer check-in. */
   distancia: number | null
+  /**
+   * Minutos a la siguiente visita, de la columna de resultados_visitas. undefined si la tabla no la tiene
+   * (entonces se calculan con las horas de las visitas).
+   */
+  minutosNueva?: number | null
 }
 
 export interface PromotorTablero {
@@ -37,14 +44,23 @@ export interface PromotorTablero {
   esPromotor: boolean
 }
 
+/** Columna de resultados_visitas de donde sale cada dato (null: no la tiene). */
+export interface FuentesTablero {
+  compra: string | null
+  minutosVisita: string | null
+  minutosNuevaVisita: string | null
+  distancia: string | null
+}
+
 export interface DatosTablero {
   rango: Rango
   visitas: VisitaTablero[]
   promotores: PromotorTablero[]
-  /** Visitas de resultados que no se encontraron en la tabla visitas (sin tiempos ni distancia). */
+  /** Visitas a las que les faltan tiempos o distancia porque no se encontraron en la tabla visitas. */
   sinDetalle: number
-  /** ¿resultados_visitas tiene la columna de la visita (id_visita)? Sin ella no hay tiempos ni distancia. */
+  /** ¿Hay forma de saber los tiempos y la distancia (columnas propias o id_visita para buscarlos en visitas)? */
   conVisita: boolean
+  fuentes: FuentesTablero
 }
 
 /**
@@ -69,8 +85,67 @@ export function instante(valor: unknown): number | null {
 
 const numero = (v: unknown): number | null => {
   if (esVacio(v) || typeof v === 'boolean') return null
-  const n = Number(v)
+  const n = Number(typeof v === 'string' ? v.trim().replace(',', '.') : v)
   return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Minutos de una columna: número (en segundos u horas si así lo dice su nombre) o "HH:MM:SS" (time / interval).
+ * null si está vacío o es negativo.
+ */
+export function minutosDe(valor: unknown, columna: string): number | null {
+  const hms = typeof valor === 'string' ? /^(\d+):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?$/.exec(valor.trim()) : null
+  let minutos: number | null
+  if (hms) minutos = Number(hms[1]) * 60 + Number(hms[2]) + (hms[3] ? Number(hms[3]) / 60 : 0)
+  else {
+    const n = numero(valor)
+    const nombre = claveColumna(columna)
+    minutos = n === null ? null : /seg/.test(nombre) ? n / 60 : /hora|hrs$/.test(nombre) ? n * 60 : n
+  }
+  return minutos !== null && minutos >= 0 ? minutos : null
+}
+
+/** Metros de una columna (en kilómetros si así lo dice su nombre). null si está vacío o es negativo. */
+export function metrosDe(valor: unknown, columna: string): number | null {
+  const n = numero(valor)
+  if (n === null || n < 0) return null
+  return /km|kilometro/.test(claveColumna(columna)) ? n * 1000 : n
+}
+
+/**
+ * Si los minutos o la distancia tienen otro nombre en resultados_visitas, se busca una columna que tenga todas
+ * las palabras de algún grupo (sin importar mayúsculas, acentos ni guiones) y ninguna de `sin`.
+ */
+const PALABRAS_TABLERO: { campo: ResultadoField; grupos: string[][]; sin?: string[] }[] = [
+  { campo: 'indicador', grupos: [['digital', 'post'], ['autogestion'], ['compra']], sin: ['tiempo', 'minuto', 'distancia', 'fecha'] },
+  { campo: 'minutosNuevaVisita', grupos: [['nueva', 'visita'], ['entre', 'visita'], ['siguiente', 'visita'], ['traslado']] },
+  {
+    campo: 'minutosVisita',
+    grupos: [['tiempo', 'visita'], ['minutos', 'visita'], ['duracion']],
+    sin: ['nueva', 'entre', 'siguiente', 'traslado', 'compra'],
+  },
+  { campo: 'distancia', grupos: [['distancia'], ['geoeficiencia']] },
+]
+
+/** Columnas de resultados_visitas para el tablero, a partir de las que trae la tabla. */
+export function columnasResultados(claves: string[]): Partial<Record<ResultadoField, string>> {
+  const c = pickColumns(schema.resultados.fields, claves)
+  const usadas = new Set<string>(Object.values(c))
+  for (const { campo, grupos, sin = [] } of PALABRAS_TABLERO) {
+    if (c[campo]) continue
+    for (const grupo of grupos) {
+      const columna = claves.find((k) => {
+        const clave = claveColumna(k)
+        return !usadas.has(k) && grupo.every((p) => clave.includes(p)) && !sin.some((p) => clave.includes(p))
+      })
+      if (columna) {
+        c[campo] = columna
+        usadas.add(columna)
+        break
+      }
+    }
+  }
+  return c
 }
 
 /** Columnas de resultados y visitas que usa el tablero. */
@@ -115,9 +190,15 @@ export function construirVisitas(resultados: Row[], visitas: Row[], c: ColumnasT
     const inicio = instante(valor(c.v.inicio))
     // hora_fin (con zona) es la más exacta; fecha_fin (sin zona) guarda la hora local.
     const fin = instante(valor(c.v.finHora)) ?? instante(valor(c.v.fin))
-    let duracion = numero(valor(c.v.duracion))
-    if (duracion === null && inicio !== null && fin !== null) duracion = (fin - inicio) / 60000
-    if (duracion !== null && (duracion <= 0 || duracion > MAX_DURACION_VISITA_MIN)) duracion = null
+    let duracion: number | null
+    if (c.r.minutosVisita) {
+      // Ya viene en resultados_visitas: tal cual.
+      duracion = minutosDe(r[c.r.minutosVisita], c.r.minutosVisita)
+    } else {
+      duracion = numero(valor(c.v.duracion))
+      if (duracion === null && inicio !== null && fin !== null) duracion = (fin - inicio) / 60000
+      if (duracion !== null && (duracion <= 0 || duracion > MAX_DURACION_VISITA_MIN)) duracion = null
+    }
 
     // Día de la visita: la hora de inicio si la visita tiene fin (la app nueva guarda ambas con zona horaria);
     // si no, cuándo se guardó la fila (FlutterFlow guardaba hora_inicio sin zona, desfasada).
@@ -128,11 +209,11 @@ export function construirVisitas(resultados: Row[], visitas: Row[], c: ColumnasT
     const fecha = momento !== null ? new Date(momento) : null
 
     let distancia: number | null = null
-    for (const col of c.distancia) {
-      const n = numero(valor(col))
-      if (n !== null && n >= 0) {
-        distancia = n
-        break
+    if (c.r.distancia) distancia = metrosDe(r[c.r.distancia], c.r.distancia)
+    else {
+      for (const col of c.distancia) {
+        distancia = metrosDe(valor(col), col)
+        if (distancia !== null) break
       }
     }
 
@@ -146,6 +227,7 @@ export function construirVisitas(resultados: Row[], visitas: Row[], c: ColumnasT
       fin,
       duracion,
       distancia,
+      minutosNueva: c.r.minutosNuevaVisita ? minutosDe(r[c.r.minutosNuevaVisita], c.r.minutosNuevaVisita) : undefined,
     }
   })
 }
@@ -178,7 +260,10 @@ export interface Indicadores {
   /** Minutos promedio de visita. */
   tiempoVisita: Promedio
   tiempoVisitaConCompra: Promedio
-  /** Minutos promedio de que termina una visita a que empieza la siguiente (mismo promotor, mismo día). */
+  /**
+   * Minutos promedio a la siguiente visita: de la columna de resultados_visitas o, si no la tiene, de que termina
+   * una visita a que empieza la siguiente (mismo promotor, mismo día).
+   */
   tiempoNuevaVisita: Promedio
   /** Metros promedio al cliente en el check-in. */
   distancia: Promedio
@@ -218,6 +303,10 @@ export function calcularIndicadores(visitas: VisitaTablero[], radio = RADIO_VISI
   const porFigura = (n: number) => (dias && promotores ? n / dias / promotores : null)
   const duraciones = (lista: VisitaTablero[]) => lista.map((v) => v.duracion).filter((d): d is number => d !== null)
   const distancias = visitas.map((v) => v.distancia).filter((d): d is number => d !== null)
+  const columnaNueva = visitas.some((v) => v.minutosNueva !== undefined)
+  const nuevas = columnaNueva
+    ? visitas.map((v) => v.minutosNueva).filter((m): m is number => typeof m === 'number')
+    : tiemposEntreVisitas(visitas)
   return {
     visitas: visitas.length,
     conCompra: conCompra.length,
@@ -227,7 +316,7 @@ export function calcularIndicadores(visitas: VisitaTablero[], radio = RADIO_VISI
     diariasConCompra: porFigura(conCompra.length),
     tiempoVisita: promedio(duraciones(visitas)),
     tiempoVisitaConCompra: promedio(duraciones(conCompra)),
-    tiempoNuevaVisita: promedio(tiemposEntreVisitas(visitas)),
+    tiempoNuevaVisita: promedio(nuevas),
     distancia: promedio(distancias),
     dentroRadio: distancias.filter((d) => d <= radio).length,
   }
@@ -317,23 +406,24 @@ async function enParalelo<T>(tareas: (() => Promise<T>)[], n = EN_PARALELO): Pro
 }
 
 /**
- * Datos del tablero para el rango: resultados_visitas (con un día de margen por las zonas horarias),
- * sus filas de visitas (tiempos y distancia) y los promotores (nombres).
+ * Datos del tablero para el rango: resultados_visitas (con un día de margen por las zonas horarias), la hora
+ * exacta de cada visita en visitas (para saber su día; y sus tiempos y distancia si resultados_visitas no los
+ * trae) y los promotores (nombres).
  */
 export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<DatosTablero> {
   const tr = ctx.tables.resultados
   const tv = ctx.tables.visitas
   const tp = ctx.tables.perfiles
   if (!tr.table) throw new Error('No se encontró la tabla resultados_visitas.')
-  const cr = tr.columns
   const cv = tv.columns
   const tablaR = tr.table
   const llave = columnaLlave(tr)
+  const fechaR = tr.columns.fecha
 
   const leerResultados = (conFecha: boolean) =>
     fetchAll(() => {
       let q = supabase.from(tablaR).select('*', { count: 'exact' })
-      if (conFecha && cr.fecha) q = q.gte(cr.fecha, sumarDias(rango.desde, -1)).lt(cr.fecha, sumarDias(rango.hasta, 1))
+      if (conFecha && fechaR) q = q.gte(fechaR, sumarDias(rango.desde, -1)).lt(fechaR, sumarDias(rango.hasta, 1))
       return llave ? q.order(llave, { ascending: true }) : q
     })
   const [resultados, promotores] = await Promise.all([
@@ -348,18 +438,30 @@ export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<Da
     tp.table && tp.columns.id ? leerPromotores(ctx).catch(() => []) : Promise.resolve([]),
   ])
 
-  const distancia = [
-    ...new Set(
-      [cv.distancia, ...(tv.allColumns ?? []).filter((c) => /distancia/i.test(c))].filter((c): c is string => Boolean(c)),
-    ),
-  ]
+  // Las columnas se leen de las filas que llegaron (la tabla pudo cambiar desde que se detectó).
+  const claves = resultados.length ? Object.keys(resultados[0]) : (tr.allColumns ?? [])
+  const cr = claves.length ? columnasResultados(claves) : tr.columns
+  // ¿Faltan minutos o distancia en resultados_visitas? Entonces se calculan con la tabla visitas.
+  const calcular = !cr.minutosVisita || !cr.minutosNuevaVisita || !cr.distancia
+
+  const distancia = calcular
+    ? [...new Set([cv.distancia, ...(tv.allColumns ?? []).filter((c) => /distancia/i.test(c))].filter((c): c is string => Boolean(c)))]
+    : []
   const columnas: ColumnasTablero = {
     r: cr,
-    v: { id: cv.id, usuario: cv.usuario, inicio: cv.inicio, fin: cv.fin, finHora: cv.finHora, registro: cv.registro, duracion: cv.duracion },
+    v: {
+      id: cv.id,
+      usuario: cv.usuario,
+      inicio: cv.inicio,
+      fin: cv.fin,
+      finHora: cv.finHora,
+      registro: cv.registro,
+      duracion: calcular ? cv.duracion : undefined,
+    },
     distancia,
   }
 
-  // Filas de visitas de esos resultados, por id en grupos.
+  // Filas de visitas de esos resultados, por id en grupos. Si no se pueden leer, el día sale de resultados_visitas.
   const ids = cr.visita
     ? [...new Set(resultados.map((r) => r[cr.visita!]).filter((v) => !esVacio(v)).map(String))]
     : []
@@ -380,12 +482,14 @@ export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<Da
           }),
         )
       ).flat()
-    visitas = await leer(seleccion).catch((error: unknown) => {
-      if (seleccion !== '*' && error && typeof error === 'object' && isMissingColumnError(error as { code: string; message: string })) {
-        return leer('*')
-      }
-      throw error
-    })
+    visitas = await leer(seleccion)
+      .catch((error: unknown) => {
+        if (seleccion !== '*' && error && typeof error === 'object' && isMissingColumnError(error as { code: string; message: string })) {
+          return leer('*')
+        }
+        throw error
+      })
+      .catch(() => [])
   }
 
   const encontradas = new Set(cv.id ? visitas.map((v) => String(v[cv.id!])) : [])
@@ -393,8 +497,14 @@ export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<Da
     rango,
     visitas: construirVisitas(resultados, visitas, columnas),
     promotores,
-    sinDetalle: ids.filter((id) => !encontradas.has(id)).length,
-    conVisita: Boolean(cr.visita),
+    sinDetalle: calcular ? ids.filter((id) => !encontradas.has(id)).length : 0,
+    conVisita: !calcular || Boolean(cr.visita),
+    fuentes: {
+      compra: cr.indicador ?? null,
+      minutosVisita: cr.minutosVisita ?? null,
+      minutosNuevaVisita: cr.minutosNuevaVisita ?? null,
+      distancia: cr.distancia ?? null,
+    },
   }
 }
 

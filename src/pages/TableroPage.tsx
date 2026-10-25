@@ -23,6 +23,7 @@ import {
   porBarra,
   porPromotor,
   type FilaPromotor,
+  type FuentesTablero,
   type Indicadores,
 } from '../data/tablero'
 import { aCsv, descargarArchivo } from '../lib/csv'
@@ -72,7 +73,7 @@ function Indicador({
 function Indicadores8({ ind }: { ind: Indicadores }) {
   const pctCompra = porcentaje(ind.conCompra, ind.visitas)
   const divisores = `${plural(ind.dias, 'día')} ÷ ${plural(ind.promotores, 'promotor', 'promotores')}`
-  const promedioDe = (n: number) => (n ? `Promedio de ${plural(n, 'visita')}` : 'Sin hora de inicio y fin')
+  const promedioDe = (n: number) => (n ? `Promedio de ${plural(n, 'visita')}` : 'Sin datos')
   return (
     <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Indicador titulo="Visitas realizadas" valor={formatoEntero(ind.visitas)} detalle="Visitas distintas" />
@@ -105,7 +106,7 @@ function Indicadores8({ ind }: { ind: Indicadores }) {
       <Indicador
         titulo="Tiempo nueva visita"
         valor={formatoMinutos(ind.tiempoNuevaVisita.valor)}
-        detalle={ind.tiempoNuevaVisita.n ? 'De que termina una visita a que empieza la siguiente' : 'Sin visitas seguidas con hora de fin'}
+        detalle={ind.tiempoNuevaVisita.n ? 'Promedio entre una visita y la siguiente' : 'Sin datos'}
       />
       <Indicador
         titulo="Geoeficiencia"
@@ -116,6 +117,33 @@ function Indicadores8({ ind }: { ind: Indicadores }) {
             : 'Sin distancia de check-in'
         }
       />
+    </div>
+  )
+}
+
+/** De qué columna de resultados_visitas sale cada dato (para comprobarlo). */
+function Fuentes({ tabla, fuentes }: { tabla: string; fuentes: FuentesTablero }) {
+  const dato = (etiqueta: string, columna: string | null, sinColumna: string) => (
+    <li>
+      {etiqueta}:{' '}
+      {columna ? (
+        <code className="rounded bg-soft px-1 font-mono text-fg">{columna}</code>
+      ) : (
+        <span className="text-amber-700 dark:text-amber-300">{sinColumna}</span>
+      )}
+    </li>
+  )
+  return (
+    <div className="mt-3 px-1 text-xs text-muted">
+      <p>
+        Columnas de <code className="font-mono">{tabla}</code> que usa el tablero:
+      </p>
+      <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        {dato('Compra autogestionada', fuentes.compra, 'no se encontró')}
+        {dato('Tiempo visita', fuentes.minutosVisita, 'calculado con la tabla visitas')}
+        {dato('Tiempo nueva visita', fuentes.minutosNuevaVisita, 'calculado con la tabla visitas')}
+        {dato('Geoeficiencia', fuentes.distancia, 'de la tabla visitas')}
+      </ul>
     </div>
   )
 }
@@ -458,6 +486,7 @@ export function TableroPage() {
           {filas.length > 0 && delPeriodo.length > 0 && (
             <TablaPromotores filas={filas} seleccionado={promotor} onSeleccionar={setPromotor} />
           )}
+          <Fuentes tabla={tabla} fuentes={datos.fuentes} />
         </div>
       )}
 
