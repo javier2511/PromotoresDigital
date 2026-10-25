@@ -18,6 +18,10 @@ import { fetchAll } from './clientes'
 export interface VisitaTablero {
   key: string
   promotor: string | null
+  cliente: string | null
+  nombreCliente: string | null
+  /** Fecha y hora de la visita, en milisegundos (de fecha_visita, como en el reporte). */
+  momento: number | null
   /** Día local "YYYY-MM-DD" (null si no tiene ninguna fecha). */
   dia: string | null
   /** Hora local 0-23 (para el día: visitas por hora). */
@@ -200,13 +204,14 @@ export function construirVisitas(resultados: Row[], visitas: Row[], c: ColumnasT
       if (duracion !== null && (duracion <= 0 || duracion > MAX_DURACION_VISITA_MIN)) duracion = null
     }
 
-    // Día de la visita: la hora de inicio si la visita tiene fin (la app nueva guarda ambas con zona horaria);
+    // Día y hora de la visita: fecha_visita de resultados_visitas, como en el reporte. Si la fila no la tiene,
+    // la de visitas: la hora de inicio si la visita tiene fin (la app nueva guarda ambas con zona horaria);
     // si no, cuándo se guardó la fila (FlutterFlow guardaba hora_inicio sin zona, desfasada).
     const momento =
-      inicio !== null && fin !== null
-        ? inicio
-        : (instante(valor(c.v.registro)) ?? (c.r.fecha ? instante(r[c.r.fecha]) : null) ?? inicio)
+      (c.r.fecha ? instante(r[c.r.fecha]) : null) ??
+      (inicio !== null && fin !== null ? inicio : (instante(valor(c.v.registro)) ?? inicio))
     const fecha = momento !== null ? new Date(momento) : null
+    const texto = (col: string | undefined) => (col && !esVacio(r[col]) ? String(r[col]).trim() : null)
 
     let distancia: number | null = null
     if (c.r.distancia) distancia = metrosDe(r[c.r.distancia], c.r.distancia)
@@ -220,6 +225,9 @@ export function construirVisitas(resultados: Row[], visitas: Row[], c: ColumnasT
     return {
       key,
       promotor,
+      cliente: texto(c.r.cliente),
+      nombreCliente: texto(c.r.nombreCliente),
+      momento,
       dia: fecha ? isoLocal(fecha) : null,
       hora: fecha ? fecha.getHours() : null,
       conCompra: c.r.indicador ? toBoolean(r[c.r.indicador]) === true : false,
@@ -356,8 +364,12 @@ export interface Barra {
   futuro: boolean
 }
 
-/** Visitas por día (semana o mes) o por hora (un día). */
-export function porBarra(visitas: VisitaTablero[], rango: Rango, ahora = new Date()): Barra[] {
+/** Visitas por día (semana o mes; o solo los días elegidos) o por hora (un día). */
+export function porBarra(
+  visitas: VisitaTablero[],
+  rango: Rango,
+  { ahora = new Date(), soloDias = [] }: { ahora?: Date; soloDias?: string[] } = {},
+): Barra[] {
   const hoy = isoLocal(ahora)
   if (rango.periodo === 'dia') {
     const horas = visitas.map((v) => v.hora).filter((h): h is number => h !== null)
@@ -376,7 +388,7 @@ export function porBarra(visitas: VisitaTablero[], rango: Rango, ahora = new Dat
     }
     return barras
   }
-  return diasDelRango(rango).map((dia) => {
+  return (soloDias.length ? [...soloDias].sort() : diasDelRango(rango)).map((dia) => {
     const delDia = visitas.filter((v) => v.dia === dia)
     return { clave: dia, visitas: delDia.length, conCompra: delDia.filter((v) => v.conCompra).length, futuro: dia > hoy }
   })
@@ -406,9 +418,8 @@ async function enParalelo<T>(tareas: (() => Promise<T>)[], n = EN_PARALELO): Pro
 }
 
 /**
- * Datos del tablero para el rango: resultados_visitas (con un día de margen por las zonas horarias), la hora
- * exacta de cada visita en visitas (para saber su día; y sus tiempos y distancia si resultados_visitas no los
- * trae) y los promotores (nombres).
+ * Datos del tablero para el rango: resultados_visitas (con un día de margen por las zonas horarias), los
+ * promotores (nombres) y, solo si resultados_visitas no trae los minutos o la distancia, sus filas de visitas.
  */
 export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<DatosTablero> {
   const tr = ctx.tables.resultados
@@ -461,12 +472,12 @@ export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<Da
     distancia,
   }
 
-  // Filas de visitas de esos resultados, por id en grupos. Si no se pueden leer, el día sale de resultados_visitas.
+  // Solo si faltan minutos o distancia: filas de visitas de esos resultados, por id en grupos.
   const ids = cr.visita
     ? [...new Set(resultados.map((r) => r[cr.visita!]).filter((v) => !esVacio(v)).map(String))]
     : []
   let visitas: Row[] = []
-  if (tv.table && cv.id && ids.length) {
+  if (calcular && tv.table && cv.id && ids.length) {
     const tablaV = tv.table
     const campos = [...new Set([...Object.values(columnas.v), ...distancia].filter((c): c is string => Boolean(c)))]
     const seleccion = tv.verified ? campos.join(',') : '*'
@@ -520,4 +531,88 @@ async function leerPromotores(ctx: SchemaContext): Promise<PromotorTablero[]> {
     const rolPromotor = !c.rol || esVacio(row[c.rol]) || normalize(row[c.rol]) === ROL_PROMOTOR
     return { id: String(row[c.id!]), nombre: nombre ?? correo ?? String(row[c.id!]), esPromotor: activo && rolPromotor }
   })
+}
+
+/** Una respuesta del cuestionario de una visita. */
+export interface RespuestaTablero {
+  visita: string
+  pregunta: string
+  /** Para ordenar las preguntas como en el formulario (id de la pregunta). */
+  orden: number
+  respuesta: string
+}
+
+const TAMANO_GRUPO_RESPUESTAS = 50
+
+/** Respuestas de esas visitas (una visita tiene varias: se pide por grupos y paginado). */
+export async function fetchRespuestasTablero(ctx: SchemaContext, ids: string[]): Promise<RespuestaTablero[]> {
+  const t = ctx.tables.respuestas
+  const c = t.columns
+  const texto = c.preguntaTexto ?? c.pregunta
+  if (!t.table || !c.visita || !texto || !c.respuesta || ids.length === 0) return []
+  const tabla = t.table
+  const llave = columnaLlave(t)
+  const grupos: string[][] = []
+  for (let i = 0; i < ids.length; i += TAMANO_GRUPO_RESPUESTAS) grupos.push(ids.slice(i, i + TAMANO_GRUPO_RESPUESTAS))
+  const filas = (
+    await enParalelo(
+      grupos.map((grupo) => () =>
+        fetchAll(() => {
+          const q = supabase.from(tabla).select('*', { count: 'exact' }).in(c.visita!, grupo)
+          return llave ? q.order(llave, { ascending: true }) : q
+        }),
+      ),
+    )
+  ).flat()
+  const ordenDe = (row: Row) => (c.pregunta && c.pregunta !== texto ? (numero(row[c.pregunta]) ?? Infinity) : Infinity)
+  return filas
+    .filter((row) => !esVacio(row[texto]))
+    .map((row) => ({
+      visita: String(row[c.visita!]),
+      pregunta: String(row[texto]).trim(),
+      orden: ordenDe(row),
+      respuesta: esVacio(row[c.respuesta!]) ? '' : String(row[c.respuesta!]).trim(),
+    }))
+}
+
+export interface PreguntaResumen {
+  pregunta: string
+  /** Visitas que la respondieron. */
+  total: number
+  /** Respuestas de más a menos frecuentes. */
+  opciones: { texto: string; n: number }[]
+  /** Respuesta escrita (muchas respuestas distintas): no se desglosa. */
+  abierta: boolean
+}
+
+const MAX_OPCIONES = 8
+
+/** "si", "Si", "Sí" cuentan juntas. */
+function etiquetaRespuesta(texto: string): string {
+  const n = normalize(texto)
+  if (n === 'si') return 'Sí'
+  if (n === 'no') return 'No'
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
+/** Cuántas veces se dio cada respuesta a cada pregunta, en el orden del formulario. */
+export function resumenCuestionario(respuestas: RespuestaTablero[]): PreguntaResumen[] {
+  const porPregunta = new Map<string, { orden: number; conteo: Map<string, { texto: string; n: number }>; total: number }>()
+  for (const r of respuestas) {
+    if (!r.respuesta) continue
+    let p = porPregunta.get(r.pregunta)
+    if (!p) porPregunta.set(r.pregunta, (p = { orden: r.orden, conteo: new Map(), total: 0 }))
+    p.orden = Math.min(p.orden, r.orden)
+    p.total++
+    const clave = normalize(r.respuesta)
+    const o = p.conteo.get(clave)
+    if (o) o.n++
+    else p.conteo.set(clave, { texto: etiquetaRespuesta(r.respuesta), n: 1 })
+  }
+  return [...porPregunta]
+    .sort(([a, pa], [b, pb]) => pa.orden - pb.orden || a.localeCompare(b, 'es'))
+    .map(([pregunta, p]) => {
+      const opciones = [...p.conteo.values()].sort((a, b) => b.n - a.n || a.texto.localeCompare(b.texto, 'es'))
+      return { pregunta, total: p.total, opciones, abierta: opciones.length > MAX_OPCIONES }
+    })
 }

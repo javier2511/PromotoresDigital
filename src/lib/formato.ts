@@ -8,20 +8,26 @@ export const formatoEntero = (n: number) => entero.format(n)
 /** "9.5" (siempre un decimal); "—" si no hay dato. */
 export const formatoDecimal = (n: number | null) => (n === null ? '—' : unDecimal.format(n))
 
-/** "12 min", "1 h 05 min"; "—" si no hay dato. */
-export function formatoMinutos(minutos: number | null): string {
-  if (minutos === null) return '—'
-  const m = Math.round(minutos)
-  if (m === 0) return minutos > 0 ? '<1 min' : '0 min'
-  if (m < 60) return `${m} min`
-  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`
-}
+const dosDecimales = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-/** "35 m", "1.2 km"; "—" si no hay dato. */
-export function formatoMetros(metros: number | null): string {
-  if (metros === null) return '—'
-  return metros < 1000 ? `${Math.round(metros)} m` : `${unDecimal.format(metros / 1000)} km`
-}
+/** Minutos con dos decimales, como en el reporte: "9.01"; "—" si no hay dato. */
+export const formatoMinutos = (minutos: number | null) => (minutos === null ? '—' : dosDecimales.format(minutos))
+
+/** Metros enteros: "11", "1,693"; "—" si no hay dato. */
+export const formatoMetros = (metros: number | null) => (metros === null ? '—' : entero.format(Math.round(metros)))
+
+const fechaHora = new Intl.DateTimeFormat('es-MX', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+})
+
+/** "19/10/2026 07:19:27 p.m."; "—" si no hay dato. */
+export const formatoFechaHora = (ms: number | null) => (ms === null ? '—' : fechaHora.format(ms).replace(',', ''))
 
 /** Porcentaje entero (0 si el total es 0). */
 export const porcentaje = (parte: number, total: number) => (total ? Math.round((parte / total) * 100) : 0)

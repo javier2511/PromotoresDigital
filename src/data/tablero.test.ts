@@ -10,6 +10,7 @@ import {
   minutosDe,
   porBarra,
   porPromotor,
+  resumenCuestionario,
   tiemposEntreVisitas,
   type ColumnasTablero,
 } from './tablero'
@@ -160,7 +161,7 @@ describe('por promotor y por barra', () => {
   })
 
   it('visitas por día de la semana (los días que no llegan quedan vacíos)', () => {
-    const barras = porBarra(lista, rangoDe('semana', '2026-10-21'), new Date(2026, 9, 21, 12))
+    const barras = porBarra(lista, rangoDe('semana', '2026-10-21'), { ahora: new Date(2026, 9, 21, 12) })
     expect(barras.map((b) => [b.clave, b.visitas, b.conCompra, b.futuro])).toEqual([
       ['2026-10-19', 3, 2, false],
       ['2026-10-20', 2, 1, false],
@@ -174,7 +175,7 @@ describe('por promotor y por barra', () => {
 
   it('visitas por hora de un día', () => {
     const delDia = lista.filter((x) => x.dia === '2026-10-20')
-    const barras = porBarra(delDia, rangoDe('dia', '2026-10-20'), new Date(2026, 9, 25, 12))
+    const barras = porBarra(delDia, rangoDe('dia', '2026-10-20'), { ahora: new Date(2026, 9, 25, 12) })
     expect(barras[0].clave).toBe('8')
     expect(barras.at(-1)!.clave).toBe('19')
     expect(barras.find((b) => b.clave === '9')!.visitas).toBe(1)
@@ -246,7 +247,7 @@ describe('resultados_visitas con minutos y distancia ya calculados', () => {
       // Sin fila en visitas: su día sale de fecha_visita.
       r(4, false, null, null, null, '2026-10-20T09:00:00'),
     ]
-    // En visitas la visita 1 duró 15 min y la 2 empezó el 18 en México (hora con zona): manda el día de visitas.
+    // En visitas la visita 1 duró 15 min y la 2 dice otro día: mandan resultados_visitas (como en el reporte).
     const enVisitas: Row[] = [
       { id_visita: 1, hora_inicio: '2026-10-19T16:00:00+00:00', hora_fin: '2026-10-19T16:15:00+00:00', distancia_checkin_m: 999 },
       { id_visita: 2, hora_inicio: '2026-10-19T01:00:00+00:00', hora_fin: '2026-10-19T01:30:00+00:00' },
@@ -255,7 +256,7 @@ describe('resultados_visitas con minutos y distancia ya calculados', () => {
     const lista = construirVisitas(filas, enVisitas, cols)
     expect(lista.map((v) => [v.key, v.duracion, v.minutosNueva, v.distancia, v.dia])).toEqual([
       ['1', 17, null, 45, '2026-10-19'],
-      ['2', 300, 18, 140, '2026-10-18'],
+      ['2', 300, 18, 140, '2026-10-19'],
       ['3', 12.5, 9, 75, '2026-10-19'],
       ['4', null, null, null, '2026-10-20'],
     ])
@@ -265,5 +266,40 @@ describe('resultados_visitas con minutos y distancia ya calculados', () => {
     expect(ind.tiempoNuevaVisita).toEqual({ valor: (18 + 9) / 2, n: 2 })
     expect(ind.distancia).toEqual({ valor: (45 + 140 + 75) / 3, n: 3 })
     expect(ind.dentroRadio).toBe(2)
+  })
+})
+
+describe('cuestionario y días elegidos', () => {
+  it('cuenta las respuestas por pregunta, en el orden del formulario ("si" y "Sí" juntas)', () => {
+    const r = (visita: string, orden: number, pregunta: string, respuesta: string) => ({ visita, orden, pregunta, respuesta })
+    const resumen = resumenCuestionario([
+      r('1', 4, 'Se realizo la visita', 'si'),
+      r('2', 4, 'Se realizo la visita', 'Si'),
+      r('3', 4, 'Se realizo la visita', 'No'),
+      r('1', 2, 'Se localizo la tienda', 'Sí'),
+      r('2', 18, 'Comentarios', ''),
+      ...Array.from({ length: 9 }, (_, i) => r(String(i), 19, 'Telefono del cliente', `55 00${i}`)),
+    ])
+    expect(resumen.map((p) => [p.pregunta, p.total, p.abierta])).toEqual([
+      ['Se localizo la tienda', 1, false],
+      ['Se realizo la visita', 3, false],
+      ['Telefono del cliente', 9, true],
+    ])
+    expect(resumen[1].opciones).toEqual([
+      { texto: 'Sí', n: 2 },
+      { texto: 'No', n: 1 },
+    ])
+  })
+
+  it('la gráfica muestra solo los días elegidos', () => {
+    const lista = construirVisitas(resultados, visitas, columnas)
+    const barras = porBarra(lista, rangoDe('semana', '2026-10-21'), {
+      ahora: new Date(2026, 9, 25, 12),
+      soloDias: ['2026-10-21', '2026-10-19'],
+    })
+    expect(barras.map((b) => [b.clave, b.visitas])).toEqual([
+      ['2026-10-19', 3],
+      ['2026-10-21', 2],
+    ])
   })
 })

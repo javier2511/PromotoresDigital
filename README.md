@@ -199,8 +199,9 @@ app y al registrarse solo se puede crear la propia fila como promotor. Para hace
 
 ### Administradores: pestaña Tablero
 
-Los admins también ven la pestaña **Tablero**, con los indicadores de las visitas de `resultados_visitas`.
-Se filtra por promotor y por día, semana (de lunes a domingo) o mes:
+Los admins también ven la pestaña **Tablero** ("Desempeño de Visitas Promotores Digitales", con el mismo diseño
+que el reporte de Power BI), con los indicadores de las visitas de `resultados_visitas`. Se filtra por uno o varios
+promotores y por semana (de lunes a domingo; con los días que quieras de esa semana) o mes:
 
 | Indicador | Cómo se calcula |
 |---|---|
@@ -208,22 +209,23 @@ Se filtra por promotor y por día, semana (de lunes a domingo) o mes:
 | Visitas con compra autogestionada | Visitas con `digital_post_visita` (o `digital_post_venta`) = true, y su porcentaje. |
 | Visitas diarias por figura | Visitas ÷ días con visitas ÷ promotores que hicieron visitas. |
 | Visitas diarias por figura con compra | Lo mismo, solo con las visitas con compra. |
-| Tiempo visita | Promedio de la columna de minutos de visita (p. ej. `tiempo_visita`). |
-| Tiempo visita con compra | Lo mismo, solo con las visitas con compra. |
-| Tiempo nueva visita | Promedio de la columna de minutos a la siguiente visita (p. ej. `tiempo_nueva_visita`). |
-| Geoeficiencia | Promedio de la columna de distancia al check-in (p. ej. `distancia_checkin`) y qué porcentaje quedó dentro del radio. |
+| Tiempo x Visita (min) | Promedio de la columna de minutos de visita (p. ej. `tiempo_visita`). |
+| Tiempo x Visita con compra (min) | Lo mismo, solo con las visitas con compra. |
+| Tiempo nueva visita (min) | Promedio de la columna de minutos a la siguiente visita (p. ej. `tiempo_nueva_visita`). |
+| Distancia (m) geoeficiencia | Promedio de la columna de distancia al check-in (p. ej. `distancia_checkin`). |
 
 Los minutos y la distancia se toman **tal cual** de `resultados_visitas`. Las columnas se reconocen por su nombre
 (`tiempo_visita`, `minutos_visita`, `duracion`…, `tiempo_nueva_visita`, `tiempo_entre_visitas`…,
 `distancia_checkin`, `distancia`…; o cualquier nombre con esas palabras) y debajo de la tabla por promotor el
-tablero dice qué columna usó para cada dato. El día y la hora de cada visita se toman de la hora exacta guardada en
-`visitas` (con zona horaria) y, si no se puede, de `fecha_visita`. Si alguna de esas columnas no existe, ese dato
-se calcula con la tabla `visitas` (`hora_inicio` / `hora_fin` / `distancia_checkin_m`; ahí las visitas de más de
+tablero dice qué columna usó para cada dato. El día y la hora de cada visita salen de `fecha_visita`, como en el
+reporte. Si alguna de esas columnas no existe, ese dato se calcula con la tabla `visitas` (`hora_inicio` / `hora_fin` / `distancia_checkin_m`; ahí las visitas de más de
 4 h y los huecos de más de 4 h no cuentan: `MAX_DURACION_VISITA_MIN` y `MAX_TIEMPO_ENTRE_VISITAS_MIN` en
 `src/config/schema.ts`).
 
-Abajo hay una gráfica de visitas por día (o por hora), una tabla por promotor y los botones para **descargar
-completas** las tablas `resultados_visitas` y `respuestas` en CSV (se abren en Excel). Para que un admin lea las
+Debajo de los indicadores están la **Tabla Detalle Visita** (una fila por visita) y la **Tabla cuestionario**
+(cuántas veces se dio cada respuesta en las visitas filtradas; al tocar una visita, sus respuestas). Después, una
+gráfica de visitas por día (o por hora si eliges un solo día), una tabla por promotor y los botones para
+**descargar completas** las tablas `resultados_visitas` y `respuestas` en CSV (se abren en Excel). Para que un admin lea las
 de todos los promotores ejecuta `supabase/11_admin_tablero.sql` (requiere el 10).
 
 ### Información del cliente (ficha)

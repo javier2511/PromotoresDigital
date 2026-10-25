@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { escalaEje, formatoDecimal, formatoMetros, formatoMinutos, porcentaje } from './formato'
+import { escalaEje, formatoDecimal, formatoFechaHora, formatoMetros, formatoMinutos, porcentaje } from './formato'
 
 describe('formatos del tablero', () => {
   it('minutos, metros y decimales', () => {
-    expect(formatoMinutos(12.4)).toBe('12 min')
-    expect(formatoMinutos(65)).toBe('1 h 05 min')
-    expect(formatoMinutos(0.3)).toBe('<1 min')
+    expect(formatoMinutos(9.0123)).toBe('9.01')
+    expect(formatoMinutos(17.6)).toBe('17.60')
     expect(formatoMinutos(null)).toBe('—')
-    expect(formatoMetros(35.4)).toBe('35 m')
-    expect(formatoMetros(16937)).toBe('16.9 km')
+    expect(formatoMetros(10.6)).toBe('11')
+    expect(formatoMetros(1693.4)).toBe('1,693')
+    expect(formatoFechaHora(new Date(2026, 9, 19, 19, 19, 27).getTime())).toMatch(/^19\/10\/2026 07:19:27 p\.\s?m\.$/)
     expect(formatoDecimal(10)).toBe('10.0')
     expect(formatoDecimal(null)).toBe('—')
     expect(porcentaje(1, 3)).toBe(33)

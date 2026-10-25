@@ -116,6 +116,7 @@ export type ResultadoField =
   | 'minutosNuevaVisita'
   | 'minutosVisita'
   | 'distancia'
+  | 'nombreCliente'
 
 export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion' | 'rol' | 'activo'
 
@@ -411,6 +412,7 @@ export const schema: Schema = {
         'distancia',
         'geoeficiencia',
       ],
+      nombreCliente: ['nombre_cliente', 'cliente_nombre', 'nombre_tienda', 'razon_social'],
     },
     required: [],
   },

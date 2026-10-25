@@ -94,6 +94,7 @@ const CAMPOS: Record<string, string> = {
   registro: 'Fecha de registro (día en el Tablero)',
   minutosVisita: 'Minutos de visita (Tablero)',
   minutosNuevaVisita: 'Minutos a la siguiente visita (Tablero)',
+  nombreCliente: 'Nombre del cliente',
   actualizado: 'Fecha de actualización',
 }
 
