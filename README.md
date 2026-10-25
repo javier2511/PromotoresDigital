@@ -222,8 +222,9 @@ reporte. Si alguna de esas columnas no existe, ese dato se calcula con la tabla 
 4 h y los huecos de más de 4 h no cuentan: `MAX_DURACION_VISITA_MIN` y `MAX_TIEMPO_ENTRE_VISITAS_MIN` en
 `src/config/schema.ts`).
 
-Debajo de los indicadores están la **Tabla Detalle Visita** (una fila por visita) y la **Tabla cuestionario**
-(cuántas veces se dio cada respuesta en las visitas filtradas; al tocar una visita, sus respuestas). Después, una
+Debajo de los indicadores están la **Tabla Detalle Visita** (una fila por visita) y la **Tabla cuestionario**: la
+tabla `respuestas` de Supabase tal cual, con todas sus columnas, solo de las visitas filtradas (al tocar una visita
+del detalle quedan solo sus respuestas). Después, una
 gráfica de visitas por día (o por hora si eliges un solo día), una tabla por promotor y los botones para
 **descargar completas** las tablas `resultados_visitas` y `respuestas` en CSV (se abren en Excel). Para que un admin lea las
 de todos los promotores ejecuta `supabase/11_admin_tablero.sql` (requiere el 10).

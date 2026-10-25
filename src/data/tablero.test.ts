@@ -10,7 +10,6 @@ import {
   minutosDe,
   porBarra,
   porPromotor,
-  resumenCuestionario,
   tiemposEntreVisitas,
   type ColumnasTablero,
 } from './tablero'
@@ -269,28 +268,7 @@ describe('resultados_visitas con minutos y distancia ya calculados', () => {
   })
 })
 
-describe('cuestionario y días elegidos', () => {
-  it('cuenta las respuestas por pregunta, en el orden del formulario ("si" y "Sí" juntas)', () => {
-    const r = (visita: string, orden: number, pregunta: string, respuesta: string) => ({ visita, orden, pregunta, respuesta })
-    const resumen = resumenCuestionario([
-      r('1', 4, 'Se realizo la visita', 'si'),
-      r('2', 4, 'Se realizo la visita', 'Si'),
-      r('3', 4, 'Se realizo la visita', 'No'),
-      r('1', 2, 'Se localizo la tienda', 'Sí'),
-      r('2', 18, 'Comentarios', ''),
-      ...Array.from({ length: 9 }, (_, i) => r(String(i), 19, 'Telefono del cliente', `55 00${i}`)),
-    ])
-    expect(resumen.map((p) => [p.pregunta, p.total, p.abierta])).toEqual([
-      ['Se localizo la tienda', 1, false],
-      ['Se realizo la visita', 3, false],
-      ['Telefono del cliente', 9, true],
-    ])
-    expect(resumen[1].opciones).toEqual([
-      { texto: 'Sí', n: 2 },
-      { texto: 'No', n: 1 },
-    ])
-  })
-
+describe('días elegidos', () => {
   it('la gráfica muestra solo los días elegidos', () => {
     const lista = construirVisitas(resultados, visitas, columnas)
     const barras = porBarra(lista, rangoDe('semana', '2026-10-21'), {

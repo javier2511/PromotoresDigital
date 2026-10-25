@@ -37,14 +37,13 @@ import {
   columnaLlave,
   fetchRespuestasTablero,
   fetchTablero,
+  instante,
   porBarra,
   porPromotor,
-  resumenCuestionario,
   type FilaPromotor,
   type FuentesTablero,
   type Indicadores,
-  type PreguntaResumen,
-  type RespuestaTablero,
+  type RespuestasTablero,
   type VisitaTablero,
 } from '../data/tablero'
 import { aCsv, descargarArchivo } from '../lib/csv'
@@ -63,6 +62,7 @@ import {
 } from '../lib/periodos'
 import { useMediaQuery } from '../lib/media'
 import { esAdmin, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
+import type { Row } from '../lib/supabase'
 import { plural } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
 
@@ -77,8 +77,9 @@ const PERIODOS: { value: Periodo; label: string }[] = [
 /** "9.01 min"; sin dato, solo "—". */
 const conUnidad = (valor: string, unidad: string) => (valor === '—' ? valor : `${valor} ${unidad}`)
 
-/** Filas que se dibujan en la tabla de detalle (el resto está en la descarga). */
+/** Filas que se dibujan en las tablas de detalle y de respuestas (el resto está en la descarga). */
 const MAX_FILAS_DETALLE = 500
+const MAX_FILAS_CUESTIONARIO = 1000
 
 function Chip({ activo, children, className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { activo: boolean }) {
   return (
@@ -193,7 +194,7 @@ function Indicadores8({ ind }: { ind: Indicadores }) {
   )
 }
 
-/** Una fila por visita (como "Tabla Detalle Visita" del reporte). Tocar una muestra sus respuestas. */
+/** Una fila por visita, de la más reciente a la más vieja (como "Tabla Detalle Visita" del reporte). Tocar una muestra sus respuestas. */
 function TablaDetalle({
   visitas,
   nombres,
@@ -205,10 +206,7 @@ function TablaDetalle({
   seleccionada: string | null
   onSeleccionar: (key: string | null) => void
 }) {
-  const filas = useMemo(
-    () => [...visitas].sort((a, b) => (b.momento ?? -Infinity) - (a.momento ?? -Infinity)).slice(0, MAX_FILAS_DETALLE),
-    [visitas],
-  )
+  const filas = useMemo(() => visitas.slice(0, MAX_FILAS_DETALLE), [visitas])
   const ancha = useMediaQuery('(min-width: 1024px)')
   const promotorDe = (v: VisitaTablero) => (v.promotor ? (nombres.get(v.promotor) ?? v.promotor) : '—')
   const compra = (v: VisitaTablero) =>
@@ -326,61 +324,45 @@ function TablaDetalle({
   )
 }
 
-function ResumenPregunta({ p }: { p: PreguntaResumen }) {
-  return (
-    <div className="py-3 first:pt-0 last:pb-0">
-      <p className="text-sm font-semibold">{p.pregunta}</p>
-      {p.abierta ? (
-        <p className="mt-1 text-sm text-muted">{plural(p.total, 'respuesta escrita', 'respuestas escritas')}</p>
-      ) : (
-        <ul className="mt-1.5 space-y-1.5">
-          {p.opciones.map((o) => {
-            const pct = porcentaje(o.n, p.total)
-            return (
-              <li key={o.texto} className="text-sm">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate">{o.texto}</span>
-                  <span className="shrink-0 text-muted tabular-nums">
-                    {formatoEntero(o.n)} · {pct}%
-                  </span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-soft" aria-hidden>
-                  <div className="h-full rounded-full bg-viz-compra" style={{ width: `${pct}%` }} />
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
-  )
+/** Una celda de la tabla respuestas tal cual (las fechas, legibles). */
+function celdaRespuesta(valor: unknown): string {
+  if (valor === null || valor === undefined) return ''
+  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(valor)) return formatoFechaHora(instante(valor))
+  return typeof valor === 'object' ? JSON.stringify(valor) : String(valor)
 }
 
-/** Respuestas del cuestionario: el resumen de las visitas filtradas, o las de la visita elegida. */
+/** La tabla respuestas de Supabase tal cual: las de las visitas filtradas, o las de la visita que se tocó. */
 function Cuestionario({
-  respuestas,
+  datos,
   cargando,
   error,
-  visitasFiltradas,
+  visitas,
   visita,
-  onVerResumen,
+  onVerTodas,
 }: {
-  respuestas: RespuestaTablero[] | undefined
+  datos: RespuestasTablero | null | undefined
   cargando: boolean
   error: unknown
-  visitasFiltradas: VisitaTablero[]
+  /** Visitas filtradas, de la más reciente a la más vieja: las respuestas salen en ese orden. */
+  visitas: VisitaTablero[]
   visita: VisitaTablero | null
-  onVerResumen: () => void
+  onVerTodas: () => void
 }) {
-  const ids = useMemo(() => new Set(visitasFiltradas.map((v) => v.key)), [visitasFiltradas])
-  const resumen = useMemo(
-    () => (respuestas && !visita ? resumenCuestionario(respuestas.filter((r) => ids.has(r.visita))) : []),
-    [respuestas, ids, visita],
-  )
-  const deLaVisita = useMemo(
-    () => (respuestas && visita ? respuestas.filter((r) => r.visita === visita.key).sort((a, b) => a.orden - b.orden) : []),
-    [respuestas, visita],
-  )
+  const posicion = useMemo(() => new Map(visitas.map((v, i) => [v.key, i])), [visitas])
+  const filas = useMemo(() => {
+    if (!datos) return []
+    const deVisita = (f: Row) => String(f[datos.visita])
+    const llave = datos.llave
+    return datos.filas
+      .filter((f) => (visita ? deVisita(f) === visita.key : posicion.has(deVisita(f))))
+      .sort((a, b) => {
+        const orden = (posicion.get(deVisita(a)) ?? 0) - (posicion.get(deVisita(b)) ?? 0)
+        if (orden || !llave) return orden
+        const na = Number(a[llave])
+        const nb = Number(b[llave])
+        return Number.isFinite(na) && Number.isFinite(nb) ? na - nb : String(a[llave]).localeCompare(String(b[llave]))
+      })
+  }, [datos, visita, posicion])
   const sinPermiso = (
     <p className="mt-2 text-xs text-muted">
       Si solo ves las respuestas de tus propias visitas, ejecuta una vez supabase/11_admin_tablero.sql en Supabase.
@@ -388,59 +370,62 @@ function Cuestionario({
   )
 
   let cuerpo: ReactNode
-  if (cargando && !respuestas) {
+  if (cargando && !datos) {
     cuerpo = (
       <div className="grid place-items-center py-10">
         <Spinner className="size-6 text-brand-600" />
       </div>
     )
-  } else if (error && !respuestas) {
+  } else if (error && !datos) {
     cuerpo = (
-      <div className="text-sm">
+      <div className="p-4 text-sm">
         <p className="text-red-700 dark:text-red-300">No se pudieron leer las respuestas: {friendlyError(error)}</p>
         {sinPermiso}
       </div>
     )
-  } else if (visita) {
+  } else if (!datos) {
+    cuerpo = <p className="p-4 text-sm text-muted">No se encontró la tabla de respuestas.</p>
+  } else if (filas.length === 0) {
     cuerpo = (
-      <>
-        <p className="text-sm">
-          <span className="font-semibold">{visita.nombreCliente ?? visita.cliente ?? 'Visita'}</span>
-          <span className="text-muted"> · {formatoFechaHora(visita.momento)}</span>
-        </p>
-        {deLaVisita.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">Esta visita no tiene respuestas guardadas.</p>
-        ) : (
-          <dl className="mt-2 divide-y divide-line">
-            {deLaVisita.map((r, i) => (
-              <div key={`${r.pregunta}-${i}`} className="py-2">
-                <dt className="text-xs text-muted">{r.pregunta}</dt>
-                <dd className="mt-0.5 text-sm font-semibold">{r.respuesta || '—'}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </>
-    )
-  } else if (resumen.length === 0) {
-    cuerpo = (
-      <div className="py-4 text-center text-sm text-muted">
-        <p>Sin respuestas para estas visitas.</p>
-        {sinPermiso}
+      <div className="p-6 text-center text-sm text-muted">
+        <p>{visita ? 'Esta visita no tiene respuestas guardadas.' : 'Sin respuestas para estas visitas.'}</p>
+        {!visita && sinPermiso}
       </div>
     )
   } else {
     cuerpo = (
-      <>
-        <p className="mb-3 text-xs text-muted">
-          Resumen de {plural(visitasFiltradas.length, 'visita')} · toca una visita en el detalle para ver sus respuestas
-        </p>
-        <div className="divide-y divide-line">
-          {resumen.map((p) => (
-            <ResumenPregunta key={p.pregunta} p={p} />
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 z-10 bg-card text-xs text-muted shadow-[inset_0_-1px_0_var(--line)]">
+          <tr>
+            {datos.columnas.map((c) => (
+              <th key={c} className="px-3 py-2 text-left font-medium whitespace-nowrap">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filas.slice(0, MAX_FILAS_CUESTIONARIO).map((f, i) => (
+            <tr key={datos.llave ? String(f[datos.llave]) : i} className="border-b border-line align-top last:border-0">
+              {datos.columnas.map((c) => (
+                <td
+                  key={c}
+                  className={cn(
+                    'px-3 py-2',
+                    c === datos.pregunta
+                      ? 'min-w-60 whitespace-normal'
+                      : c === datos.respuesta
+                        ? 'min-w-28 max-w-xs whitespace-normal'
+                        : 'whitespace-nowrap tabular-nums',
+                  )}
+                >
+                  {celdaRespuesta(f[c])}
+                </td>
+              ))}
+            </tr>
           ))}
-        </div>
-      </>
+        </tbody>
+      </table>
     )
   }
 
@@ -448,20 +433,39 @@ function Cuestionario({
     <Card id="cuestionario" className="flex min-w-0 scroll-mt-4 flex-col overflow-hidden">
       <EncabezadoTablero
         accion={
-          visita && (
+          visita ? (
             <button
               type="button"
-              onClick={onVerResumen}
+              onClick={onVerTodas}
               className="h-8 shrink-0 rounded-lg px-2 text-sm font-semibold text-white/90 hover:bg-white/10"
             >
-              Ver resumen
+              Ver todas
             </button>
+          ) : (
+            datos && <span className="shrink-0 text-xs text-white/80">{plural(filas.length, 'respuesta')}</span>
           )
         }
       >
         Tabla cuestionario
       </EncabezadoTablero>
-      <div className="max-h-[440px] overflow-auto p-4">{cuerpo}</div>
+      {datos && filas.length > 0 && (
+        <p className="border-b border-line px-4 py-2 text-xs text-muted">
+          {visita ? (
+            <>
+              Respuestas de la visita {visita.key} · {visita.nombreCliente ?? visita.cliente ?? ''} · {formatoFechaHora(visita.momento)}
+            </>
+          ) : (
+            <>Respuestas de las {plural(visitas.length, 'visita')} filtradas · toca una visita en el detalle para ver solo las suyas</>
+          )}
+        </p>
+      )}
+      <div className="max-h-[480px] overflow-auto">{cuerpo}</div>
+      {filas.length > MAX_FILAS_CUESTIONARIO && (
+        <p className="border-t border-line px-4 py-2 text-xs text-muted">
+          Se muestran {formatoEntero(MAX_FILAS_CUESTIONARIO)} de {formatoEntero(filas.length)}; la tabla completa está en
+          "Descargar tablas completas".
+        </p>
+      )}
     </Card>
   )
 }
@@ -684,6 +688,7 @@ export function TableroPage() {
     [enDias, elegidos],
   )
   const indicadores = useMemo(() => calcularIndicadores(visibles), [visibles])
+  const recientes = useMemo(() => [...visibles].sort((a, b) => (b.momento ?? -Infinity) - (a.momento ?? -Infinity)), [visibles])
   const barras = useMemo(() => {
     if (!datos) return []
     if (periodo === 'semana' && dias.length === 1) return porBarra(visibles, rangoDe('dia', dias[0]))
@@ -718,9 +723,14 @@ export function TableroPage() {
   const alternar = <T,>(lista: T[], x: T) => (lista.includes(x) ? lista.filter((y) => y !== x) : [...lista, x])
   const elegirVisita = (key: string | null) => {
     setVisitaKey(key)
-    // En el teléfono el cuestionario está abajo del detalle.
-    if (key && window.innerWidth < 1024) {
-      requestAnimationFrame(() => document.getElementById('cuestionario')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    // El cuestionario está abajo del detalle: si no se ve, se baja hasta él.
+    if (key) {
+      requestAnimationFrame(() => {
+        const cuestionario = document.getElementById('cuestionario')
+        if (cuestionario && cuestionario.getBoundingClientRect().top > window.innerHeight - 160) {
+          cuestionario.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      })
     }
   }
 
@@ -886,15 +896,15 @@ export function TableroPage() {
           ) : (
             <>
               <Indicadores8 ind={indicadores} />
-              <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-                <TablaDetalle visitas={visibles} nombres={nombres} seleccionada={visita?.key ?? null} onSeleccionar={elegirVisita} />
+              <div className="mt-3 space-y-3">
+                <TablaDetalle visitas={recientes} nombres={nombres} seleccionada={visita?.key ?? null} onSeleccionar={elegirVisita} />
                 <Cuestionario
-                  respuestas={respuestas.data}
+                  datos={respuestas.data}
                   cargando={respuestas.isFetching}
                   error={respuestas.error}
-                  visitasFiltradas={visibles}
+                  visitas={recientes}
                   visita={visita}
-                  onVerResumen={() => setVisitaKey(null)}
+                  onVerTodas={() => setVisitaKey(null)}
                 />
               </div>
               <div className="mt-3">

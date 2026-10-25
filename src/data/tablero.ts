@@ -533,25 +533,29 @@ async function leerPromotores(ctx: SchemaContext): Promise<PromotorTablero[]> {
   })
 }
 
-/** Una respuesta del cuestionario de una visita. */
-export interface RespuestaTablero {
+/** La tabla respuestas tal cual (solo las filas de las visitas pedidas). */
+export interface RespuestasTablero {
+  filas: Row[]
+  /** Columnas en el orden de la tabla. */
+  columnas: string[]
+  /** Columna que liga cada respuesta con su visita (id_visita). */
   visita: string
-  pregunta: string
-  /** Para ordenar las preguntas como en el formulario (id de la pregunta). */
-  orden: number
-  respuesta: string
+  /** Llave de la tabla (id_respuesta): ordena las respuestas de una visita como se guardaron. */
+  llave: string | null
+  /** Columnas de texto (la pregunta y la respuesta), que pueden ocupar varias líneas. */
+  pregunta: string | null
+  respuesta: string | null
 }
 
 const TAMANO_GRUPO_RESPUESTAS = 50
 
-/** Respuestas de esas visitas (una visita tiene varias: se pide por grupos y paginado). */
-export async function fetchRespuestasTablero(ctx: SchemaContext, ids: string[]): Promise<RespuestaTablero[]> {
+/** Filas de respuestas de esas visitas (una visita tiene varias: se pide por grupos y paginado). */
+export async function fetchRespuestasTablero(ctx: SchemaContext, ids: string[]): Promise<RespuestasTablero | null> {
   const t = ctx.tables.respuestas
   const c = t.columns
-  const texto = c.preguntaTexto ?? c.pregunta
-  if (!t.table || !c.visita || !texto || !c.respuesta || ids.length === 0) return []
+  if (!t.table || !c.visita) return null
   const tabla = t.table
-  const llave = columnaLlave(t)
+  const llave = columnaLlave(t) ?? null
   const grupos: string[][] = []
   for (let i = 0; i < ids.length; i += TAMANO_GRUPO_RESPUESTAS) grupos.push(ids.slice(i, i + TAMANO_GRUPO_RESPUESTAS))
   const filas = (
@@ -564,55 +568,12 @@ export async function fetchRespuestasTablero(ctx: SchemaContext, ids: string[]):
       ),
     )
   ).flat()
-  const ordenDe = (row: Row) => (c.pregunta && c.pregunta !== texto ? (numero(row[c.pregunta]) ?? Infinity) : Infinity)
-  return filas
-    .filter((row) => !esVacio(row[texto]))
-    .map((row) => ({
-      visita: String(row[c.visita!]),
-      pregunta: String(row[texto]).trim(),
-      orden: ordenDe(row),
-      respuesta: esVacio(row[c.respuesta!]) ? '' : String(row[c.respuesta!]).trim(),
-    }))
-}
-
-export interface PreguntaResumen {
-  pregunta: string
-  /** Visitas que la respondieron. */
-  total: number
-  /** Respuestas de más a menos frecuentes. */
-  opciones: { texto: string; n: number }[]
-  /** Respuesta escrita (muchas respuestas distintas): no se desglosa. */
-  abierta: boolean
-}
-
-const MAX_OPCIONES = 8
-
-/** "si", "Si", "Sí" cuentan juntas. */
-function etiquetaRespuesta(texto: string): string {
-  const n = normalize(texto)
-  if (n === 'si') return 'Sí'
-  if (n === 'no') return 'No'
-  return texto.charAt(0).toUpperCase() + texto.slice(1)
-}
-
-/** Cuántas veces se dio cada respuesta a cada pregunta, en el orden del formulario. */
-export function resumenCuestionario(respuestas: RespuestaTablero[]): PreguntaResumen[] {
-  const porPregunta = new Map<string, { orden: number; conteo: Map<string, { texto: string; n: number }>; total: number }>()
-  for (const r of respuestas) {
-    if (!r.respuesta) continue
-    let p = porPregunta.get(r.pregunta)
-    if (!p) porPregunta.set(r.pregunta, (p = { orden: r.orden, conteo: new Map(), total: 0 }))
-    p.orden = Math.min(p.orden, r.orden)
-    p.total++
-    const clave = normalize(r.respuesta)
-    const o = p.conteo.get(clave)
-    if (o) o.n++
-    else p.conteo.set(clave, { texto: etiquetaRespuesta(r.respuesta), n: 1 })
+  return {
+    filas,
+    columnas: filas.length ? Object.keys(filas[0]) : (t.allColumns ?? []),
+    visita: c.visita,
+    llave,
+    pregunta: c.preguntaTexto ?? null,
+    respuesta: c.respuesta ?? null,
   }
-  return [...porPregunta]
-    .sort(([a, pa], [b, pb]) => pa.orden - pb.orden || a.localeCompare(b, 'es'))
-    .map(([pregunta, p]) => {
-      const opciones = [...p.conteo.values()].sort((a, b) => b.n - a.n || a.texto.localeCompare(b.texto, 'es'))
-      return { pregunta, total: p.total, opciones, abierta: opciones.length > MAX_OPCIONES }
-    })
 }
