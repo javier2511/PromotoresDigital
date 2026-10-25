@@ -197,6 +197,28 @@ protege la tabla promotores: cada usuario ve solo su fila (un admin, todas), nad
 app y al registrarse solo se puede crear la propia fila como promotor. Para hacer admin a alguien:
 `update public.promotores set rol = 'admin' where correo = 'correo@empresa.com';`
 
+### Administradores: pestaña Tablero
+
+Los admins también ven la pestaña **Tablero**, con los indicadores de las visitas de `resultados_visitas` (los
+tiempos y la distancia salen de la fila de `visitas` con el mismo `id_visita`). Se filtra por promotor y por día,
+semana (de lunes a domingo) o mes:
+
+| Indicador | Cómo se calcula |
+|---|---|
+| Visitas realizadas | Visitas distintas (`id_visita`); si una visita está cargada varias veces cuenta la fila más reciente. |
+| Visitas con compra autogestionada | Visitas con `digital_post_visita = true` (y su porcentaje). |
+| Visitas diarias por figura | Visitas ÷ días con visitas ÷ promotores que hicieron visitas. |
+| Visitas diarias por figura con compra | Lo mismo, solo con las visitas con compra. |
+| Tiempo visita | Minutos promedio de `hora_inicio` a `hora_fin` (o `fecha_fin`). Las de más de 4 h no cuentan. |
+| Tiempo visita con compra | Lo mismo, solo con las visitas con compra. |
+| Tiempo nueva visita | Minutos promedio de que termina una visita a que empieza la siguiente, mismo promotor y mismo día (huecos de más de 4 h no cuentan). |
+| Geoeficiencia | Distancia promedio al cliente en el check-in (`distancia_checkin_m`) y qué porcentaje quedó dentro del radio. |
+
+Abajo hay una gráfica de visitas por día (o por hora), una tabla por promotor y los botones para **descargar
+completas** las tablas `resultados_visitas` y `respuestas` en CSV (se abren en Excel). Para que un admin lea las
+de todos los promotores ejecuta `supabase/11_admin_tablero.sql` (requiere el 10). Los límites de 4 h se cambian en
+`src/config/schema.ts` (`MAX_DURACION_VISITA_MIN`, `MAX_TIEMPO_ENTRE_VISITAS_MIN`).
+
 ### Información del cliente (ficha)
 
 **Día de entrega:** ejecuta `supabase/07_dia_entrega.sql` para agregar la columna `dia_entrega` a clientes y

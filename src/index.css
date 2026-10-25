@@ -74,6 +74,9 @@
   --muted: #6b6b75;
   --line: #e8e6e7;
   --soft: #f1f0f1;
+  /* Gráficas del Tablero: con compra (rojo de la marca) y sin compra (gris que no compite). */
+  --viz-compra: #e4001b;
+  --viz-resto: #d4d1d6;
   color-scheme: light;
 }
 
@@ -85,6 +88,8 @@
     --muted: #a3a1a8;
     --line: #2a272b;
     --soft: #221f23;
+    --viz-compra: #f8293b;
+    --viz-resto: #4a464e;
     color-scheme: dark;
   }
 }
@@ -96,6 +101,8 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-soft: var(--soft);
+  --color-viz-compra: var(--viz-compra);
+  --color-viz-resto: var(--viz-resto);
 }
 
 @layer base {

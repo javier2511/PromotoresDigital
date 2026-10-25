@@ -1,4 +1,4 @@
-import { ChartColumn, CircleUserRound, Map as MapIcon, Store, Users, type LucideIcon } from 'lucide-react'
+import { ChartColumn, CircleUserRound, LayoutDashboard, Map as MapIcon, Store, Users, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet, ScrollRestoration, useMatches } from 'react-router'
 import { useClientes, useSchema } from '../data/hooks'
 import { esAdmin } from '../lib/schema-resolver'
@@ -25,8 +25,13 @@ const NAV: NavItem[] = [
   { to: '/perfil', label: 'Perfil', icon: CircleUserRound },
 ]
 
-/** Solo administradores (rol admin en promotores): jornadas de todo el equipo. */
-const NAV_ADMIN: NavItem = { to: '/equipo', label: 'Equipo', icon: Users }
+/** Solo administradores (rol admin en promotores): indicadores de las visitas y jornadas de todo el equipo. */
+const NAV_ADMIN: NavItem[] = [
+  { to: '/tablero', label: 'Tablero', icon: LayoutDashboard },
+  { to: '/equipo', label: 'Equipo', icon: Users },
+]
+
+const COLUMNAS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5', 6: 'grid-cols-6' }
 
 function useRouteHandle(): RouteHandle {
   const matches = useMatches()
@@ -56,7 +61,7 @@ export function AppShell() {
   const { user } = useAuth()
   const { data: ctx } = useSchema()
   useAsegurarPerfil()
-  const nav = esAdmin(ctx) ? [...NAV.slice(0, 3), NAV_ADMIN, NAV[3]] : NAV
+  const nav = esAdmin(ctx) ? [...NAV.slice(0, 3), ...NAV_ADMIN, NAV[3]] : NAV
 
   return (
     <div className="min-h-dvh">
@@ -106,7 +111,7 @@ export function AppShell() {
       {/* Barra inferior (móvil) */}
       {!handle.hideNav && (
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card/90 pb-safe backdrop-blur-xl lg:hidden">
-          <div className={cn('mx-auto grid h-16 max-w-lg', nav.length === 5 ? 'grid-cols-5' : 'grid-cols-4')}>
+          <div className={cn('mx-auto grid h-16 max-w-lg', COLUMNAS[nav.length])}>
             {nav.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}

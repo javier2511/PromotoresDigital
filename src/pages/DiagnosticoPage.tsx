@@ -91,6 +91,8 @@ const CAMPOS: Record<string, string> = {
   indicador: 'Indicador del resumen (Sí/No)',
   authId: 'Id de usuario (auth)',
   email: 'Correo',
+  registro: 'Fecha de registro (día en el Tablero)',
+  actualizado: 'Fecha de actualización',
 }
 
 function TableCard({ k, t }: { k: keyof Schema; t: ResolvedTable }) {

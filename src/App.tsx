@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, useLocation } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { Toaster } from 'sonner'
 import { AppShell, type RouteHandle } from './components/AppShell'
-import { FullScreenLoader } from './components/ui/Spinner'
+import { FullScreenLoader, Spinner } from './components/ui/Spinner'
 import { SchemaError } from './data/clientes'
 import { isNetworkError } from './lib/errors'
 import { isSupabaseConfigured } from './lib/supabase'
@@ -23,6 +23,9 @@ import { VisitaFinalizadaPage } from './pages/VisitaFinalizadaPage'
 import { VisitaPage } from './pages/VisitaPage'
 import { AuthProvider, useAuth } from './providers/AuthProvider'
 import { GeoProvider } from './providers/GeoProvider'
+
+// Solo lo usan los administradores: se descarga al abrirlo.
+const TableroPage = lazy(() => import('./pages/TableroPage').then((m) => ({ default: m.TableroPage })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +67,20 @@ const router = createBrowserRouter([
       { path: 'resultados', element: <ResultadosPage /> },
       { path: 'perfil', element: <PerfilPage /> },
       { path: 'equipo', element: <EquipoPage /> },
+      {
+        path: 'tablero',
+        element: (
+          <Suspense
+            fallback={
+              <div className="grid min-h-[60dvh] place-items-center">
+                <Spinner className="size-7 text-brand-600" />
+              </div>
+            }
+          >
+            <TableroPage />
+          </Suspense>
+        ),
+      },
       { path: 'diagnostico', element: <DiagnosticoPage />, handle: hideNav },
       { path: '*', element: <NotFoundPage /> },
     ],

@@ -92,6 +92,7 @@ export type VisitaField =
   | 'latitudCheckin'
   | 'longitudCheckin'
   | 'ubicacionCheckin'
+  | 'registro'
 
 export type RespuestaField =
   | 'id'
@@ -103,7 +104,7 @@ export type RespuestaField =
   | 'usuario'
   | 'fecha'
 
-export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha' | 'indicador'
+export type ResultadoField = 'usuario' | 'cliente' | 'titulo' | 'fecha' | 'indicador' | 'visita' | 'id' | 'actualizado'
 
 export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion' | 'rol' | 'activo'
 
@@ -311,6 +312,8 @@ export const schema: Schema = {
       latitudCheckin: ['latitud_checkin', 'lat_checkin'],
       longitudCheckin: ['longitud_checkin', 'lng_checkin', 'lon_checkin'],
       ubicacionCheckin: ['ubicacion_checkin'],
+      // Momento en que se guardó la fila (lo pone Supabase): con él se sabe el día de cada visita en el Tablero.
+      registro: ['fecha_visita', 'created_at', 'fecha_registro', 'creado_en'],
     },
     required: ['cliente'],
   },
@@ -326,7 +329,8 @@ export const schema: Schema = {
       'respuesta',
     ],
     fields: {
-      id: ['id'],
+      // La llave ordena la descarga completa del Tablero (páginas sin huecos ni repetidos).
+      id: ['id', 'id_respuesta', 'respuesta_id'],
       visita: ['visita_id', 'id_visita', 'visita'],
       pregunta: ['pregunta_id', 'id_pregunta', 'pregunta'],
       preguntaTexto: ['pregunta_texto', 'texto_pregunta', 'pregunta'],
@@ -344,6 +348,8 @@ export const schema: Schema = {
       'resultados',
       'resultados_visitas',
       'resultados_visita',
+      'resultado_visitas',
+      'resultado_visita',
       'resultados_promotor',
       'resultados_promotores',
       'resultado',
@@ -354,7 +360,12 @@ export const schema: Schema = {
       titulo: ['titulo', 'indicador', 'concepto', 'kpi', 'metrica', 'nombre', 'descripcion'],
       fecha: ['fecha', 'fecha_visita', 'periodo', 'mes', 'semana', 'fecha_actualizacion', 'created_at'],
       // Sí/No que se resume arriba de Resultados (cuántos clientes y qué porcentaje). Ver ETIQUETA_INDICADOR.
-      indicador: ['digital_post_visita', 'digital', 'es_digital'],
+      // En el Tablero: visita con compra autogestionada.
+      indicador: ['digital_post_visita', 'digital_post_venta', 'compra_autogestionada', 'digital', 'es_digital'],
+      // Tablero (administradores): visita a la que corresponde el resultado y cuál fila es la más reciente.
+      visita: ['id_visita', 'visita_id'],
+      id: ['id_resultado', 'resultado_id', 'id'],
+      actualizado: ['fecha_actualizacion', 'updated_at', 'actualizado_en'],
     },
     required: [],
   },
@@ -538,6 +549,14 @@ export const TITULO_METRICAS = 'Últimos 3 meses'
 
 /** Nombre del indicador Sí/No del resumen de Resultados (columna `indicador` de la tabla de resultados). */
 export const ETIQUETA_INDICADOR = 'Digital post visita'
+
+/**
+ * TABLERO (pestaña de administradores)
+ * Visitas más largas que esto no cuentan en "Tiempo visita" (quedaron abiertas y se cerraron después),
+ * y huecos más largos entre una visita y la siguiente no cuentan en "Tiempo nueva visita" (comida, fin de ruta).
+ */
+export const MAX_DURACION_VISITA_MIN = 240
+export const MAX_TIEMPO_ENTRE_VISITAS_MIN = 240
 
 /** Etiquetas bonitas para columnas en Resultados (opcional). Ej.: { ventas_mes: 'Ventas del mes' } */
 export const ETIQUETAS: Record<string, string> = {}
