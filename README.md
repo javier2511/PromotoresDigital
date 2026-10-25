@@ -201,7 +201,8 @@ app y al registrarse solo se puede crear la propia fila como promotor. Para hace
 
 Los admins también ven la pestaña **Tablero** ("Desempeño de Visitas Promotores Digitales", con el mismo diseño
 que el reporte de Power BI), con los indicadores de las visitas de `resultados_visitas`. Se filtra por uno o varios
-promotores y por semana (de lunes a domingo; con los días que quieras de esa semana) o mes:
+promotores (solo aparecen los que tienen visitas en el periodo) y por semana (de lunes a domingo; con los días que
+quieras de esa semana) o mes:
 
 | Indicador | Cómo se calcula |
 |---|---|
@@ -222,11 +223,11 @@ reporte. Si alguna de esas columnas no existe, ese dato se calcula con la tabla 
 4 h y los huecos de más de 4 h no cuentan: `MAX_DURACION_VISITA_MIN` y `MAX_TIEMPO_ENTRE_VISITAS_MIN` en
 `src/config/schema.ts`).
 
-Debajo de los indicadores están la **Tabla Detalle Visita** (una fila por visita) y la **Tabla cuestionario**: la
-tabla `respuestas` de Supabase tal cual, con todas sus columnas, solo de las visitas filtradas (al tocar una visita
-del detalle quedan solo sus respuestas). Después, una
-gráfica de visitas por día (o por hora si eliges un solo día), una tabla por promotor y los botones para
-**descargar completas** las tablas `resultados_visitas` y `respuestas` en CSV (se abren en Excel). Para que un admin lea las
+Debajo de los indicadores van la gráfica de visitas por día (o por hora si eliges un solo día), la tabla por
+promotor (solo los que tienen visitas) y los botones para **descargar completas** las tablas `resultados_visitas` y
+`respuestas` en CSV (se abren en Excel). Hasta abajo, la **Tabla Detalle Visita** (una fila por visita) y la
+**Tabla cuestionario**: la tabla `respuestas` de Supabase tal cual, con todas sus columnas, solo de las visitas
+filtradas (al tocar una visita del detalle quedan solo sus respuestas). Para que un admin lea las
 de todos los promotores ejecuta `supabase/11_admin_tablero.sql` (requiere el 10).
 
 ### Información del cliente (ficha)

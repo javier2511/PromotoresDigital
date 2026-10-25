@@ -143,18 +143,16 @@ describe('indicadores', () => {
 describe('por promotor y por barra', () => {
   const lista = construirVisitas(resultados, visitas, columnas)
 
-  it('incluye a los promotores activos sin visitas, al final', () => {
+  it('solo los promotores con visitas, de más a menos visitas', () => {
     const filas = porPromotor(lista, [
-      { id: 'A', nombre: 'Ana', esPromotor: true },
-      { id: 'B', nombre: 'Beto', esPromotor: true },
-      { id: 'D', nombre: 'Diana', esPromotor: true },
-      { id: 'X', nombre: 'Admin', esPromotor: false },
+      { id: 'A', nombre: 'Ana' },
+      { id: 'B', nombre: 'Beto' },
+      { id: 'D', nombre: 'Diana' },
     ])
     expect(filas.map((f) => [f.nombre, f.indicadores.visitas])).toEqual([
       ['Ana', 4],
       ['Beto', 2],
       ['C', 1],
-      ['Diana', 0],
     ])
     expect(filas[0].indicadores.diarias).toBe(2) // 4 visitas en 2 días
   })

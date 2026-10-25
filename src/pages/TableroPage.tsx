@@ -695,17 +695,16 @@ export function TableroPage() {
     return porBarra(visibles, datos.rango, { soloDias: periodo === 'semana' ? dias : [] })
   }, [visibles, datos, periodo, dias])
   const rangoGrafica = periodo === 'semana' && dias.length === 1 ? rangoDe('dia', dias[0]) : (datos?.rango ?? rango)
-  const nombres = useMemo(() => new Map(filas.filter((f) => f.id).map((f) => [f.id!, f.nombre])), [filas])
+  const nombres = useMemo(() => new Map((datos?.promotores ?? []).map((p) => [p.id, p.nombre])), [datos])
   const visita = visibles.find((v) => v.key === visitaKey) ?? null
 
-  // Opciones del filtro de promotor: los de la tabla (con visitas o activos), por nombre; y los elegidos aunque no estén.
+  // Opciones del filtro de promotor: solo los que tienen visitas en el periodo (y los elegidos, para poder quitarlos).
   const opciones = useMemo(() => {
-    const lista = filas.map((f) => ({ id: f.id ?? SIN_PROMOTOR, nombre: f.nombre }))
-    for (const id of elegidos) {
-      if (!lista.some((o) => o.id === id)) lista.push({ id, nombre: datos?.promotores.find((p) => p.id === id)?.nombre ?? id })
-    }
-    return lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [filas, elegidos, datos])
+    const ids = new Set([...delPeriodo.map((v) => v.promotor ?? SIN_PROMOTOR), ...elegidos])
+    return [...ids]
+      .map((id) => ({ id, nombre: id === SIN_PROMOTOR ? 'Sin promotor' : (nombres.get(id) ?? id) }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  }, [delPeriodo, elegidos, nombres])
 
   if (ctxPending) return null
   if (!admin) return <Navigate to="/" replace />
@@ -896,24 +895,13 @@ export function TableroPage() {
           ) : (
             <>
               <Indicadores8 ind={indicadores} />
-              <div className="mt-3 space-y-3">
-                <TablaDetalle visitas={recientes} nombres={nombres} seleccionada={visita?.key ?? null} onSeleccionar={elegirVisita} />
-                <Cuestionario
-                  datos={respuestas.data}
-                  cargando={respuestas.isFetching}
-                  error={respuestas.error}
-                  visitas={recientes}
-                  visita={visita}
-                  onVerTodas={() => setVisitaKey(null)}
-                />
-              </div>
               <div className="mt-3">
                 <GraficaVisitas barras={barras} rango={rangoGrafica} hoy={hoy} />
               </div>
             </>
           )}
-          {filas.length > 0 && enDias.length > 0 && (
-            <div className="mt-3">
+          {filas.length > 0 && (
+            <div id="por-promotor" className="mt-3">
               <TablaPromotores
                 filas={filas}
                 seleccionados={elegidos}
@@ -926,6 +914,21 @@ export function TableroPage() {
       )}
 
       {ctx && <Descargas ctx={ctx} />}
+
+      {/* Las tablas de detalle, hasta abajo. */}
+      {datos && visibles.length > 0 && (
+        <div className={cn('mt-6 space-y-3 transition-opacity', cargandoOtro && 'opacity-50')}>
+          <TablaDetalle visitas={recientes} nombres={nombres} seleccionada={visita?.key ?? null} onSeleccionar={elegirVisita} />
+          <Cuestionario
+            datos={respuestas.data}
+            cargando={respuestas.isFetching}
+            error={respuestas.error}
+            visitas={recientes}
+            visita={visita}
+            onVerTodas={() => setVisitaKey(null)}
+          />
+        </div>
+      )}
     </div>
   )
 }

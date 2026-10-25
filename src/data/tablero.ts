@@ -2,7 +2,6 @@ import { RADIO_VISITA_M } from '../config/app'
 import {
   MAX_DURACION_VISITA_MIN,
   MAX_TIEMPO_ENTRE_VISITAS_MIN,
-  ROL_PROMOTOR,
   schema,
   type ResultadoField,
   type VisitaField,
@@ -11,7 +10,7 @@ import { claveColumna } from '../lib/info-cliente'
 import { diasDelRango, isoLocal, sumarDias, type Rango } from '../lib/periodos'
 import { isMissingColumnError, pickColumns, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
-import { esVacio, normalize, toBoolean } from '../lib/text'
+import { esVacio, toBoolean } from '../lib/text'
 import { fetchAll } from './clientes'
 
 /** Una visita de resultados_visitas (minutos y distancia de sus columnas, o calculados con su fila en visitas). */
@@ -44,8 +43,6 @@ export interface VisitaTablero {
 export interface PromotorTablero {
   id: string
   nombre: string
-  /** Promotor activo (los que aparecen aunque no tengan visitas). */
-  esPromotor: boolean
 }
 
 /** Columna de resultados_visitas de donde sale cada dato (null: no la tiene). */
@@ -336,11 +333,10 @@ export interface FilaPromotor {
   indicadores: Indicadores
 }
 
-/** Indicadores de cada promotor (también los promotores activos sin visitas, al final). */
+/** Indicadores de cada promotor que tiene visitas (los nombres salen de la tabla de promotores). */
 export function porPromotor(visitas: VisitaTablero[], promotores: PromotorTablero[]): FilaPromotor[] {
   const nombres = new Map(promotores.map((p) => [p.id, p.nombre]))
   const grupos = new Map<string | null, VisitaTablero[]>()
-  for (const p of promotores) if (p.esPromotor) grupos.set(p.id, [])
   for (const v of visitas) {
     const lista = grupos.get(v.promotor)
     if (lista) lista.push(v)
@@ -526,10 +522,7 @@ async function leerPromotores(ctx: SchemaContext): Promise<PromotorTablero[]> {
   return filas.map((row) => {
     const nombre = c.nombre && !esVacio(row[c.nombre]) ? String(row[c.nombre]).trim() : null
     const correo = c.email && !esVacio(row[c.email]) ? String(row[c.email]).trim() : null
-    const activo = !c.activo || toBoolean(row[c.activo]) !== false
-    // Rol vacío = promotor (así quedan al registrarse).
-    const rolPromotor = !c.rol || esVacio(row[c.rol]) || normalize(row[c.rol]) === ROL_PROMOTOR
-    return { id: String(row[c.id!]), nombre: nombre ?? correo ?? String(row[c.id!]), esPromotor: activo && rolPromotor }
+    return { id: String(row[c.id!]), nombre: nombre ?? correo ?? String(row[c.id!]) }
   })
 }
 
