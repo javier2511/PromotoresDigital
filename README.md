@@ -107,9 +107,11 @@ columnas (por ejemplo `latitud`/`lat`, `user_id`/`usuario_id`/`email`, `visitado
 
 ### Cómo escribe en tu base (igual que FlutterFlow)
 
-**Con tabla `asignaciones`** (tu caso): la lista del promotor son sus asignaciones (`id_promotor` = su usuario).
-Un cliente está *pendiente* si tiene una asignación Pendiente / En proceso / Reagendada y *visitado* si su
-asignación está Completada; las Canceladas no se muestran ni cuentan en el avance. Los clientes se identifican
+**Con tabla `asignaciones`** (tu caso): la lista del promotor son sus asignaciones (`id_promotor` = su usuario)
+**de la semana en curso**: solo las que tienen `fecha_asignada` entre el lunes y el domingo de esta semana (para
+usar todas, `ASIGNACIONES_SOLO_SEMANA = false` en `src/config/schema.ts`). El avance de visitas, los contadores y
+el mapa cuentan solo esas. Un cliente está *pendiente* si tiene una asignación Pendiente / En proceso / Reagendada
+y *visitado* si su asignación está Completada; las Canceladas no se muestran ni cuentan en el avance. Los clientes se identifican
 por `id_cliente` (el texto que usan asignaciones y visitas), no por el `id` numérico.
 
 Al finalizar una visita la app:

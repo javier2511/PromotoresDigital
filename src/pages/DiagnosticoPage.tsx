@@ -11,11 +11,12 @@ import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { Skeleton } from '../components/ui/Skeleton'
 import { schema, VALOR_ASIGNACION_COMPLETADA, type Schema } from '../config/schema'
-import { columnaReseteado } from '../data/clientes'
+import { columnaReseteado, semanaDeAsignaciones } from '../data/clientes'
 import type { Formulario } from '../data/formulario'
 import { queryKeys, useClientes, useFormulario, useSchema } from '../data/hooks'
 import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
 import { leerUltimoError } from '../lib/errors'
+import { hoyLocal, partesPeriodo } from '../lib/periodos'
 import { describirRegla } from '../lib/rules'
 import { clearSchemaCache, esAdmin, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
 import { useUser } from '../providers/AuthProvider'
@@ -385,6 +386,14 @@ export function DiagnosticoPage() {
                     usuario). Visitado ={' '}
                     <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.tables.asignaciones.columns.estatus ?? 'estatus'}</code>{' '}
                     "{VALOR_ASIGNACION_COMPLETADA}".
+                    {semanaDeAsignaciones(ctx) && (
+                      <>
+                        {' '}
+                        Solo las de esta semana:{' '}
+                        <code className="rounded bg-soft px-1 font-mono text-fg">{ctx.tables.asignaciones.columns.fecha}</code> del{' '}
+                        {partesPeriodo(semanaDeAsignaciones(ctx)!, hoyLocal()).titulo}.
+                      </>
+                    )}
                   </>
                 ) : ctx.owner?.error ? (
                   <span className="text-red-700 dark:text-red-300">

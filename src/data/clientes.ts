@@ -1,8 +1,14 @@
 import type { PostgrestError, User } from '@supabase/supabase-js'
-import { ESTATUS_ASIGNACION_COMPLETADA, ESTATUS_ASIGNACION_OCULTA, VALORES_VISITADO } from '../config/schema'
+import {
+  ASIGNACIONES_SOLO_SEMANA,
+  ESTATUS_ASIGNACION_COMPLETADA,
+  ESTATUS_ASIGNACION_OCULTA,
+  VALORES_VISITADO,
+} from '../config/schema'
 import { locationFromColumns, parseLocation, type LatLng } from '../lib/geo'
 import { diasDe } from '../lib/dias'
 import { recentlyFinished } from '../lib/draft'
+import { hoyLocal, rangoDe, type Rango } from '../lib/periodos'
 import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
 import { likeExact, ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
@@ -141,12 +147,26 @@ interface AsignacionesPorCliente {
 const estatusEn = (lista: string[], valor: unknown) => lista.includes(normalize(valor))
 
 /** Asignaciones del usuario agrupadas por cliente (las canceladas no cuentan). */
+/**
+ * Semana (de lunes a domingo) cuyas asignaciones se muestran: la de hoy. null si se usan todas
+ * (ASIGNACIONES_SOLO_SEMANA = false, o la tabla de asignaciones no tiene fecha).
+ */
+export function semanaDeAsignaciones(ctx: SchemaContext, hoy = hoyLocal()): Rango | null {
+  const a = ctx.tables.asignaciones
+  return ASIGNACIONES_SOLO_SEMANA && a.table && a.columns.cliente && a.columns.usuario && a.columns.fecha
+    ? rangoDe('semana', hoy)
+    : null
+}
+
 async function fetchAsignaciones(ctx: SchemaContext, user: User): Promise<AsignacionesPorCliente> {
   const a = ctx.tables.asignaciones
   const c = a.columns
+  const semana = semanaDeAsignaciones(ctx)
   const rows = await fetchAll(() => {
-    const q = supabase.from(a.table!).select('*', { count: 'exact' }).order(c.id ?? c.cliente!, { ascending: true })
-    return whereUser(q, c.usuario!, ownerValueFor(c.usuario!, ctx, user))
+    let q = supabase.from(a.table!).select('*', { count: 'exact' })
+    // Solo las de la semana en curso (fecha_asignada de lunes a domingo).
+    if (semana) q = q.gte(c.fecha!, semana.desde).lt(c.fecha!, semana.hasta)
+    return whereUser(q.order(c.id ?? c.cliente!, { ascending: true }), c.usuario!, ownerValueFor(c.usuario!, ctx, user))
   })
   const grupos = new Map<string, Row[]>()
   for (const row of rows) {

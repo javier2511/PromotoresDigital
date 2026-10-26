@@ -511,6 +511,11 @@ export const ESTATUS_ASIGNACION_COMPLETADA = ['completada', 'completado', 'visit
 export const ESTATUS_ASIGNACION_OCULTA = ['cancelada', 'cancelado']
 /** Valor que se escribe en asignaciones.estatus al finalizar la visita (debe estar en tu lista permitida). */
 export const VALOR_ASIGNACION_COMPLETADA = 'Completada'
+/**
+ * Clientes y avance de visitas: solo las asignaciones cuya fecha (fecha_asignada) cae en la semana en curso,
+ * de lunes a domingo. false: todas las asignaciones de la tabla.
+ */
+export const ASIGNACIONES_SOLO_SEMANA = true
 
 /** Roles (columna rol de promotores) que ven la pestaña "Equipo"; ROL_PROMOTOR son los que aparecen en ella. */
 export const ROLES_ADMIN = ['admin', 'administrador']

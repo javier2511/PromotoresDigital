@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SchemaContext } from '../lib/schema-resolver'
-import { columnaReseteado, fetchAll, isVisitedValue, visitadoValue, type Cliente } from './clientes'
+import { columnaReseteado, fetchAll, isVisitedValue, semanaDeAsignaciones, visitadoValue, type Cliente } from './clientes'
 
 /** Simula una consulta paginada de PostgREST con un límite de filas por respuesta. */
 function fakeQuery(total: number, maxRows: number, withCount = true) {
@@ -62,5 +62,20 @@ describe('columna reseteado', () => {
   it('si no, cualquiera que contenga "reset"', () => {
     expect(columnaReseteado(ctx({ id: 'id_cliente' }), ['id_cliente', 'nombre_cliente', 'Reseteo_Premia'])).toBe('Reseteo_Premia')
     expect(columnaReseteado(ctx({ id: 'id_cliente' }), ['id_cliente', 'nombre_cliente'])).toBeUndefined()
+  })
+})
+
+describe('asignaciones de la semana', () => {
+  const ctx = (columns: Record<string, string>) =>
+    ({ tables: { asignaciones: { table: 'asignaciones', columns } } }) as unknown as SchemaContext
+  const conFecha = ctx({ cliente: 'id_cliente', usuario: 'id_promotor', fecha: 'fecha_asignada' })
+
+  it('de lunes a domingo de la semana en curso (el domingo es de la semana que empezó el lunes)', () => {
+    expect(semanaDeAsignaciones(conFecha, '2026-10-26')).toEqual({ periodo: 'semana', desde: '2026-10-26', hasta: '2026-11-02' })
+    expect(semanaDeAsignaciones(conFecha, '2026-11-01')).toEqual({ periodo: 'semana', desde: '2026-10-26', hasta: '2026-11-02' })
+  })
+
+  it('sin columna de fecha se usan todas', () => {
+    expect(semanaDeAsignaciones(ctx({ cliente: 'id_cliente', usuario: 'id_promotor' }), '2026-10-26')).toBeNull()
   })
 })

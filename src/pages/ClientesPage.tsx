@@ -13,9 +13,11 @@ import { ProgressRing } from '../components/ui/ProgressRing'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Skeleton } from '../components/ui/Skeleton'
 import { RADIO_VISITA_M } from '../config/app'
+import { semanaDeAsignaciones } from '../data/clientes'
 import { useClientes, useSchema, type ClienteConDistancia, type Progreso } from '../data/hooks'
 import { DIAS } from '../lib/dias'
 import { filtrarPorDia, SIN_DIA, useFiltroDia } from '../lib/filtro-dia'
+import { hoyLocal, partesPeriodo } from '../lib/periodos'
 import { draftClienteKeys } from '../lib/draft'
 import { normalize } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
@@ -38,7 +40,7 @@ function saludo(): string {
   return 'Buenas noches'
 }
 
-function ProgressHero({ progreso }: { progreso: Progreso }) {
+function ProgressHero({ progreso, semana }: { progreso: Progreso; semana: string | null }) {
   const pct = Math.round(progreso.ratio * 100)
   return (
     <div className="rounded-3xl border border-line bg-card p-5 shadow-float shadow-brand-900/10">
@@ -50,7 +52,8 @@ function ProgressHero({ progreso }: { progreso: Progreso }) {
           </div>
         </ProgressRing>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-muted">Avance de visitas</p>
+          <p className="text-sm font-medium text-muted">{semana ? 'Avance de la semana' : 'Avance de visitas'}</p>
+          {semana && <p className="text-xs text-muted">{semana}</p>}
           <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums">
             {progreso.visitados} <span className="text-lg font-semibold text-muted">de {progreso.total}</span>
           </p>
@@ -90,6 +93,9 @@ export function ClientesPage() {
   const user = useUser()
   const { data: ctx } = useSchema()
   const { clientes, progreso, isPending, isFetching, error, refetch } = useClientes()
+  // Solo se cuentan las asignaciones de esta semana (lunes a domingo): "26 oct – 1 nov".
+  const semana = ctx ? semanaDeAsignaciones(ctx) : null
+  const textoSemana = semana ? partesPeriodo(semana, hoyLocal()).titulo : null
   const { position } = useGeo()
   const [params, setParams] = useSearchParams()
 
@@ -180,7 +186,7 @@ export function ClientesPage() {
           {isPending && !error ? (
             <Skeleton className="h-[132px] rounded-3xl shadow-float" />
           ) : progreso && progreso.total > 0 ? (
-            <ProgressHero progreso={progreso} />
+            <ProgressHero progreso={progreso} semana={textoSemana} />
           ) : (
             <div className="h-12" />
           )}
@@ -245,9 +251,15 @@ export function ClientesPage() {
           ) : isPending ? (
             <ListSkeleton />
           ) : progreso?.total === 0 ? (
-            <EmptyState icon={Store} title="Aún no tienes clientes asignados">
-              Cuando tu administrador te asigne clientes aparecerán aquí.
-            </EmptyState>
+            textoSemana ? (
+              <EmptyState icon={CalendarDays} title="No tienes clientes asignados esta semana">
+                Semana del {textoSemana}. Cuando tu administrador te asigne clientes para esta semana aparecerán aquí.
+              </EmptyState>
+            ) : (
+              <EmptyState icon={Store} title="Aún no tienes clientes asignados">
+                Cuando tu administrador te asigne clientes aparecerán aquí.
+              </EmptyState>
+            )
           ) : lista.length === 0 ? (
             q ? (
               <EmptyState icon={Search} title="Sin resultados">
