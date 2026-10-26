@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Barra } from '../../data/tablero'
 import { capitalizar, escalaEje, porcentaje } from '../../lib/formato'
-import { deIso, DIAS_CORTOS, fechaLarga, type Rango } from '../../lib/periodos'
+import { deIso, diaMes, DIAS_CORTOS, fechaLarga, partesPeriodo, rangoDe, semanaIso, sumarDias, type Rango } from '../../lib/periodos'
 import { Card } from '../ui/Card'
 import { cn } from '../ui/cn'
 import { EncabezadoTablero } from './Encabezado'
@@ -21,25 +21,35 @@ function Columna({ barra, tope }: { barra: Barra; tope: number }) {
   )
 }
 
-/** Visitas por día (o por hora, si el periodo es un día): con compra en rojo, sin compra en gris. */
+/** Visitas por día, por hora (un día) o por semana (el total de muchos días): con compra en verde, sin compra en gris. */
 export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango: Rango; hoy: string }) {
   const [seleccion, setSeleccion] = useState<number | null>(null)
   const [verTabla, setVerTabla] = useState(false)
-  const porHora = rango.periodo === 'dia'
+  const tipo = barras[0]?.tipo ?? (rango.periodo === 'dia' ? 'hora' : 'dia')
+  const porHora = tipo === 'hora'
+  const porSemana = tipo === 'semana'
+  // En "total" puede haber muchas barras: solo algunas llevan su fecha abajo.
+  const cada = rango.periodo === 'total' ? Math.max(1, Math.ceil(barras.length / 8)) : 1
   const { tope, marcas } = escalaEje(Math.max(0, ...barras.map((b) => b.visitas)))
   const columnas = { gridTemplateColumns: `repeat(${barras.length}, minmax(0, 1fr))` }
   const total = barras.reduce((s, b) => s + b.visitas, 0)
   const totalCompra = barras.reduce((s, b) => s + b.conCompra, 0)
   const actual = seleccion !== null ? barras[seleccion] : null
 
-  const titulo = (b: Barra) => (porHora ? `De ${b.clave}:00 a ${Number(b.clave) + 1}:00` : capitalizar(fechaLarga(b.clave, hoy)))
-  const etiqueta = (b: Barra) => {
+  const titulo = (b: Barra) =>
+    porHora
+      ? `De ${b.clave}:00 a ${Number(b.clave) + 1}:00`
+      : porSemana
+        ? `Semana ${semanaIso(b.clave)} · ${partesPeriodo(rangoDe('semana', b.clave), hoy).titulo}`
+        : capitalizar(fechaLarga(b.clave, hoy))
+  const etiqueta = (b: Barra, i: number) => {
     if (porHora) return Number(b.clave) % 2 === 0 ? b.clave : ''
+    if (rango.periodo === 'total') return i % cada === 0 ? diaMes(b.clave) : ''
     const d = deIso(b.clave)
     if (rango.periodo === 'semana') return `${DIAS_CORTOS[d.getDay()]} ${d.getDate()}`
     return d.getDate() === 1 || d.getDate() % 5 === 0 ? String(d.getDate()) : ''
   }
-  const esHoy = (b: Barra) => !porHora && b.clave === hoy
+  const esHoy = (b: Barra) => (porSemana ? b.clave <= hoy && hoy < sumarDias(b.clave, 7) : !porHora && b.clave === hoy)
   const resumen = (visitas: number, conCompra: number) =>
     `${visitas} ${visitas === 1 ? 'visita' : 'visitas'} · ${conCompra} con compra (${porcentaje(conCompra, visitas)}%)`
 
@@ -56,7 +66,7 @@ export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango:
           </button>
         }
       >
-        {porHora ? 'Visitas por hora' : 'Visitas por día'}
+        {porHora ? 'Visitas por hora' : porSemana ? 'Visitas por semana' : 'Visitas por día'}
       </EncabezadoTablero>
       <div className="p-4 pt-3">
         <div className="flex items-center gap-3 text-xs text-muted">
@@ -73,7 +83,7 @@ export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango:
             <table className="w-full text-sm">
               <thead className="bg-soft text-xs font-semibold text-fg">
                 <tr className="border-b border-line">
-                  <th className="py-2.5 pr-3 pl-2 text-left">{porHora ? 'Hora' : 'Día'}</th>
+                  <th className="py-2.5 pr-3 pl-2 text-left">{porHora ? 'Hora' : porSemana ? 'Semana' : 'Día'}</th>
                   <th className="px-3 py-2.5 text-right">Visitas</th>
                   <th className="px-3 py-2.5 text-right">Con compra</th>
                   <th className="py-2.5 pr-2 pl-3 text-right">% con compra</th>
@@ -156,9 +166,9 @@ export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango:
                   </div>
                 </div>
                 <div className="mt-1.5 grid text-center text-[11px] leading-tight text-muted tabular-nums" style={columnas} aria-hidden>
-                  {barras.map((b) => (
+                  {barras.map((b, i) => (
                     <span key={b.clave} className={cn('whitespace-nowrap', esHoy(b) && 'font-bold text-fg', b.futuro && 'opacity-50')}>
-                      {etiqueta(b)}
+                      {etiqueta(b, i)}
                     </span>
                   ))}
                 </div>

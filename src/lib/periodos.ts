@@ -1,5 +1,5 @@
-/** Periodos del tablero: un día, una semana (lunes a domingo) o un mes. Fechas locales "YYYY-MM-DD". */
-export type Periodo = 'dia' | 'semana' | 'mes'
+/** Periodos del tablero: todo, un día, una semana (lunes a domingo) o un mes. Fechas locales "YYYY-MM-DD". */
+export type Periodo = 'total' | 'dia' | 'semana' | 'mes'
 
 export interface Rango {
   periodo: Periodo
@@ -31,8 +31,12 @@ export function sumarDias(fecha: string, dias: number): string {
   return isoLocal(d)
 }
 
-/** Día, semana (de lunes a domingo) o mes que contiene a `ancla`. */
+/** Límites de "total": abarcan cualquier fecha. */
+export const SIN_LIMITE = { desde: '0001-01-01', hasta: '9999-12-31' }
+
+/** Todo, o el día, la semana (de lunes a domingo) o el mes que contiene a `ancla`. */
 export function rangoDe(periodo: Periodo, ancla: string): Rango {
+  if (periodo === 'total') return { periodo, ...SIN_LIMITE }
   if (periodo === 'dia') return { periodo, desde: ancla, hasta: sumarDias(ancla, 1) }
   const d = deIso(ancla)
   if (periodo === 'semana') {
@@ -48,6 +52,7 @@ export function rangoDe(periodo: Periodo, ancla: string): Rango {
 
 /** Mueve la fecha de referencia un periodo hacia atrás (-1) o adelante (+1). */
 export function moverPeriodo(periodo: Periodo, ancla: string, pasos: number): string {
+  if (periodo === 'total') return ancla
   if (periodo === 'dia') return sumarDias(ancla, pasos)
   if (periodo === 'semana') return sumarDias(ancla, 7 * pasos)
   // Mismo día del mes, sin pasarse del último (31 de marzo → 30 de abril).
@@ -91,6 +96,12 @@ const MESES_LARGOS = [
 export const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const DIAS_LARGOS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 
+/** "19 oct". */
+export function diaMes(fecha: string): string {
+  const d = deIso(fecha)
+  return `${d.getDate()} ${MESES[d.getMonth()]}`
+}
+
 /** "lunes 20 de octubre" (con el año si no es el actual). */
 export function fechaLarga(fecha: string, hoy: string): string {
   const d = deIso(fecha)
@@ -100,6 +111,7 @@ export function fechaLarga(fecha: string, hoy: string): string {
 
 /** El periodo en dos partes: { titulo: "19 – 25 oct", detalle: "Semana 43" }; detalle "Hoy"/"Ayer" en un día. */
 export function partesPeriodo(r: Rango, hoy: string): { titulo: string; detalle: string | null } {
+  if (r.periodo === 'total') return { titulo: 'Todas las visitas', detalle: null }
   const d = deIso(r.desde)
   const anio = r.desde.slice(0, 4) !== hoy.slice(0, 4) ? ` ${d.getFullYear()}` : ''
   if (r.periodo === 'dia') {

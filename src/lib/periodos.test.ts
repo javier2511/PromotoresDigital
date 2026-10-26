@@ -15,6 +15,16 @@ describe('rangoDe', () => {
   })
 })
 
+describe('total', () => {
+  it('abarca cualquier fecha y no se mueve', () => {
+    const r = rangoDe('total', '2026-10-26')
+    expect(r.periodo).toBe('total')
+    expect('2020-01-01' >= r.desde && '2030-12-31' < r.hasta).toBe(true)
+    expect(moverPeriodo('total', '2026-10-26', 1)).toBe('2026-10-26')
+    expect(etiquetaPeriodo(r, '2026-10-26')).toBe('Todas las visitas')
+  })
+})
+
 describe('moverPeriodo', () => {
   it('mueve días, semanas y meses (sin pasarse del último día del mes)', () => {
     expect(moverPeriodo('dia', '2026-11-01', -1)).toBe('2026-10-31')

@@ -279,3 +279,34 @@ describe('días elegidos', () => {
     ])
   })
 })
+
+describe('total', () => {
+  const v = (key: string, dia: string, conCompra = false) =>
+    ({ key, promotor: 'A', cliente: null, nombreCliente: null, momento: null, dia, hora: 10, conCompra, inicio: null, fin: null, duracion: null, distancia: null })
+
+  it('pocos días: una barra por día, del primero hasta hoy', () => {
+    const barras = porBarra([v('1', '2026-10-12', true), v('2', '2026-10-14')], rangoDe('total', '2026-10-16'), {
+      ahora: new Date(2026, 9, 16, 12),
+    })
+    expect(barras.map((b) => [b.clave, b.tipo, b.visitas, b.conCompra])).toEqual([
+      ['2026-10-12', 'dia', 1, 1],
+      ['2026-10-13', 'dia', 0, 0],
+      ['2026-10-14', 'dia', 1, 0],
+      ['2026-10-15', 'dia', 0, 0],
+      ['2026-10-16', 'dia', 0, 0],
+    ])
+  })
+
+  it('muchos días: una barra por semana (de lunes a domingo)', () => {
+    const barras = porBarra([v('1', '2026-08-05', true), v('2', '2026-08-09'), v('3', '2026-10-14')], rangoDe('total', '2026-10-16'), {
+      ahora: new Date(2026, 9, 16, 12),
+    })
+    expect(barras[0]).toMatchObject({ clave: '2026-08-03', tipo: 'semana', visitas: 2, conCompra: 1 })
+    expect(barras.at(-1)).toMatchObject({ clave: '2026-10-12', tipo: 'semana', visitas: 1 })
+    expect(barras).toHaveLength(11)
+  })
+
+  it('sin visitas no hay barras', () => {
+    expect(porBarra([], rangoDe('total', '2026-10-16'))).toEqual([])
+  })
+})

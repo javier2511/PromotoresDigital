@@ -7,7 +7,7 @@ import {
   type VisitaField,
 } from '../config/schema'
 import { claveColumna } from '../lib/info-cliente'
-import { diasDelRango, isoLocal, sumarDias, type Rango } from '../lib/periodos'
+import { diasDelRango, isoLocal, rangoDe, sumarDias, type Rango } from '../lib/periodos'
 import { isMissingColumnError, pickColumns, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { esVacio, toBoolean } from '../lib/text'
@@ -352,21 +352,47 @@ export function porPromotor(visitas: VisitaTablero[], promotores: PromotorTabler
 }
 
 export interface Barra {
+  /** La hora ("9"), el día ("2026-10-19") o el lunes de la semana. */
   clave: string
-  /** Visitas y visitas con compra en ese día u hora. */
+  tipo: 'hora' | 'dia' | 'semana'
+  /** Visitas y visitas con compra en esa hora, día o semana. */
   visitas: number
   conCompra: number
   /** Día que todavía no llega (se dibuja vacío). */
   futuro: boolean
 }
 
-/** Visitas por día (semana o mes; o solo los días elegidos) o por hora (un día). */
+/** En "total", hasta este número de días se agrupa por día; con más, por semana. */
+const MAX_DIAS_POR_DIA = 35
+
+/** Visitas por día (semana o mes; o solo los días elegidos), por hora (un día) o, en total, por día o semana. */
 export function porBarra(
   visitas: VisitaTablero[],
   rango: Rango,
   { ahora = new Date(), soloDias = [] }: { ahora?: Date; soloDias?: string[] } = {},
 ): Barra[] {
   const hoy = isoLocal(ahora)
+  const contar = (clave: string, tipo: Barra['tipo'], lista: VisitaTablero[], futuro = false): Barra => ({
+    clave,
+    tipo,
+    visitas: lista.length,
+    conCompra: lista.filter((v) => v.conCompra).length,
+    futuro,
+  })
+  if (rango.periodo === 'total') {
+    // Del primer día con visitas hasta hoy (o hasta la última visita, si es después).
+    const dias = visitas.map((v) => v.dia).filter((d): d is string => d !== null).sort()
+    if (dias.length === 0) return []
+    const fin = dias[dias.length - 1] > hoy ? dias[dias.length - 1] : hoy
+    const todos = diasDelRango({ desde: dias[0], hasta: sumarDias(fin, 1) })
+    if (todos.length <= MAX_DIAS_POR_DIA) return todos.map((dia) => contar(dia, 'dia', visitas.filter((v) => v.dia === dia)))
+    const semanas: Barra[] = []
+    for (let lunes = rangoDe('semana', dias[0]).desde; lunes <= fin; lunes = sumarDias(lunes, 7)) {
+      const hasta = sumarDias(lunes, 7)
+      semanas.push(contar(lunes, 'semana', visitas.filter((v) => v.dia !== null && v.dia >= lunes && v.dia < hasta)))
+    }
+    return semanas
+  }
   if (rango.periodo === 'dia') {
     const horas = visitas.map((v) => v.hora).filter((h): h is number => h !== null)
     // De 8:00 a 19:00, más lo que haya antes o después.
@@ -374,20 +400,14 @@ export function porBarra(
     const hasta = Math.max(19, ...horas)
     const barras: Barra[] = []
     for (let h = desde; h <= hasta; h++) {
-      const enHora = visitas.filter((v) => v.hora === h)
-      barras.push({
-        clave: String(h),
-        visitas: enHora.length,
-        conCompra: enHora.filter((v) => v.conCompra).length,
-        futuro: rango.desde > hoy || (rango.desde === hoy && h > ahora.getHours()),
-      })
+      const futuro = rango.desde > hoy || (rango.desde === hoy && h > ahora.getHours())
+      barras.push(contar(String(h), 'hora', visitas.filter((v) => v.hora === h), futuro))
     }
     return barras
   }
-  return (soloDias.length ? [...soloDias].sort() : diasDelRango(rango)).map((dia) => {
-    const delDia = visitas.filter((v) => v.dia === dia)
-    return { clave: dia, visitas: delDia.length, conCompra: delDia.filter((v) => v.conCompra).length, futuro: dia > hoy }
-  })
+  return (soloDias.length ? [...soloDias].sort() : diasDelRango(rango)).map((dia) =>
+    contar(dia, 'dia', visitas.filter((v) => v.dia === dia), dia > hoy),
+  )
 }
 
 /** Primera columna que parece llave (id, id_resultado…): para paginar en orden estable. */
@@ -430,7 +450,10 @@ export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<Da
   const leerResultados = (conFecha: boolean) =>
     fetchAll(() => {
       let q = supabase.from(tablaR).select('*', { count: 'exact' })
-      if (conFecha && fechaR) q = q.gte(fechaR, sumarDias(rango.desde, -1)).lt(fechaR, sumarDias(rango.hasta, 1))
+      // En "total" se leen todas; si no, el periodo con un día de margen.
+      if (conFecha && fechaR && rango.periodo !== 'total') {
+        q = q.gte(fechaR, sumarDias(rango.desde, -1)).lt(fechaR, sumarDias(rango.hasta, 1))
+      }
       return llave ? q.order(llave, { ascending: true }) : q
     })
   const [resultados, promotores] = await Promise.all([
