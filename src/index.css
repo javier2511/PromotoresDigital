@@ -74,8 +74,8 @@
   --muted: #6b6b75;
   --line: #e8e6e7;
   --soft: #f1f0f1;
-  /* Gráficas del Tablero: con compra (rojo de la marca) y sin compra (gris que no compite). */
-  --viz-compra: #e4001b;
+  /* Gráficas del Tablero: con compra (verde, como los clientes visitados) y sin compra (gris que no compite). */
+  --viz-compra: #16a34a;
   --viz-resto: #d4d1d6;
   color-scheme: light;
 }
@@ -88,7 +88,7 @@
     --muted: #a3a1a8;
     --line: #2a272b;
     --soft: #221f23;
-    --viz-compra: #f8293b;
+    --viz-compra: #16a34a;
     --viz-resto: #4a464e;
     color-scheme: dark;
   }

@@ -60,7 +60,6 @@ import {
   rangoDe,
   type Periodo,
 } from '../lib/periodos'
-import { useMediaQuery } from '../lib/media'
 import { esAdmin, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import type { Row } from '../lib/supabase'
 import { plural } from '../lib/text'
@@ -74,8 +73,8 @@ const PERIODOS: { value: Periodo; label: string }[] = [
   { value: 'mes', label: 'Mes' },
 ]
 
-/** "9.01 min"; sin dato, solo "—". */
-const conUnidad = (valor: string, unidad: string) => (valor === '—' ? valor : `${valor} ${unidad}`)
+/** Encabezado de las tablas: una franja gris con el nombre de cada columna, fija al desplazarse. */
+const ENCABEZADO_TABLA = 'sticky top-0 z-10 bg-soft text-xs font-semibold text-fg shadow-[inset_0_-1px_0_var(--line)]'
 
 /** Filas que se dibujan en las tablas de detalle y de respuestas (el resto está en la descarga). */
 const MAX_FILAS_DETALLE = 500
@@ -176,7 +175,7 @@ function Indicadores8({ ind }: { ind: Indicadores }) {
       />
       <TarjetaKpi
         icono={FileClock}
-        titulo="Tiempo nueva visita (min)"
+        titulo="Tiempo entre visitas (min)"
         valor={formatoMinutos(ind.tiempoNuevaVisita.valor)}
         ayuda="Promedio entre una visita y la siguiente"
       />
@@ -207,112 +206,79 @@ function TablaDetalle({
   onSeleccionar: (key: string | null) => void
 }) {
   const filas = useMemo(() => visitas.slice(0, MAX_FILAS_DETALLE), [visitas])
-  const ancha = useMediaQuery('(min-width: 1024px)')
   const promotorDe = (v: VisitaTablero) => (v.promotor ? (nombres.get(v.promotor) ?? v.promotor) : '—')
-  const compra = (v: VisitaTablero) =>
-    v.conCompra ? (
-      <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Sí</span>
-    ) : (
-      <span className="text-xs text-muted">No</span>
-    )
-  const th = 'px-3 py-2 font-medium'
+  const th = 'px-3 py-2.5 whitespace-nowrap'
   const td = 'px-3 py-2 whitespace-nowrap'
   return (
-    <Card className="flex min-w-0 flex-col overflow-hidden">
+    <Card id="detalle" className="flex min-w-0 flex-col overflow-hidden">
       <EncabezadoTablero accion={<span className="shrink-0 text-xs text-white/80">{plural(visitas.length, 'visita')}</span>}>
         Tabla Detalle Visita
       </EncabezadoTablero>
       <div className="max-h-[440px] overflow-auto">
-        {ancha ? (
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-card text-xs text-muted shadow-[inset_0_-1px_0_var(--line)]">
-              <tr>
-                <th className={cn(th, 'text-left')}>Cliente</th>
-                <th className={cn(th, 'text-left')}>Promotor</th>
-                <th className={cn(th, 'text-left')}>Fecha visita</th>
-                <th className={cn(th, 'text-center')}>Compra</th>
-                <th className={cn(th, 'text-right')}>Tiempo (min)</th>
-                <th className={cn(th, 'text-right')}>Nueva visita (min)</th>
-                <th className={cn(th, 'text-right')}>Distancia (m)</th>
-              </tr>
-            </thead>
-            <tbody className="tabular-nums">
-              {filas.map((v) => {
-                const activa = v.key === seleccionada
-                // Fecha arriba y hora abajo, para que la tabla quepa junto al cuestionario.
-                const texto = formatoFechaHora(v.momento)
-                const corte = texto.indexOf(' ')
-                return (
-                  <tr
-                    key={v.key}
-                    data-visita={v.key}
-                    onClick={() => onSeleccionar(activa ? null : v.key)}
-                    aria-selected={activa}
-                    className={cn(
-                      'cursor-pointer border-b border-line last:border-0',
-                      activa ? 'bg-brand-50 dark:bg-brand-950/40' : 'hover:bg-soft',
-                    )}
-                  >
-                    <td className={td}>
-                      <button
-                        type="button"
-                        className="block max-w-44 text-left"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onSeleccionar(activa ? null : v.key)
-                        }}
-                      >
-                        <span className="block font-semibold">{v.cliente ?? '—'}</span>
-                        {v.nombreCliente && <span className="block truncate text-xs text-muted">{v.nombreCliente}</span>}
-                      </button>
-                    </td>
-                    <td className={cn(td, 'max-w-36 truncate')}>{promotorDe(v)}</td>
-                    <td className={td}>
-                      <span className="block">{corte > 0 ? texto.slice(0, corte) : texto}</span>
-                      {corte > 0 && <span className="block text-xs text-muted">{texto.slice(corte + 1)}</span>}
-                    </td>
-                    <td className={cn(td, 'text-center')}>{compra(v)}</td>
-                    <td className={cn(td, 'text-right')}>{formatoMinutos(v.duracion)}</td>
-                    <td className={cn(td, 'text-right')}>{formatoMinutos(v.minutosNueva ?? null)}</td>
-                    <td className={cn(td, 'text-right')}>{formatoMetros(v.distancia)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <ul className="divide-y divide-line">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className={ENCABEZADO_TABLA}>
+            <tr>
+              <th className={cn(th, 'text-left')}>Cliente</th>
+              <th className={cn(th, 'text-left')}>Promotor</th>
+              <th className={cn(th, 'text-left')}>Fecha visita</th>
+              <th className={cn(th, 'text-center')}>Compra</th>
+              <th className={cn(th, 'text-right')}>Tiempo (min)</th>
+              <th className={cn(th, 'text-right')}>Entre visitas (min)</th>
+              <th className={cn(th, 'text-right')}>Distancia (m)</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
             {filas.map((v) => {
               const activa = v.key === seleccionada
+              // Fecha arriba y hora abajo, para que la tabla sea más angosta.
+              const texto = formatoFechaHora(v.momento)
+              const corte = texto.indexOf(' ')
               return (
-                <li key={v.key}>
-                  <button
-                    type="button"
-                    data-visita={v.key}
-                    aria-pressed={activa}
-                    onClick={() => onSeleccionar(activa ? null : v.key)}
-                    className={cn('block w-full px-4 py-2.5 text-left', activa ? 'bg-brand-50 dark:bg-brand-950/40' : 'active:bg-soft')}
-                  >
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 truncate text-sm">
-                        <span className="font-semibold">{v.cliente ?? '—'}</span>
-                        {v.nombreCliente && <span className="text-muted"> · {v.nombreCliente}</span>}
+                <tr
+                  key={v.key}
+                  data-visita={v.key}
+                  onClick={() => onSeleccionar(activa ? null : v.key)}
+                  aria-selected={activa}
+                  className={cn(
+                    'cursor-pointer border-b border-line last:border-0',
+                    activa ? 'bg-brand-50 dark:bg-brand-950/40' : 'hover:bg-soft',
+                  )}
+                >
+                  <td className={td}>
+                    <button
+                      type="button"
+                      className="block max-w-44 text-left"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onSeleccionar(activa ? null : v.key)
+                      }}
+                    >
+                      <span className="block font-semibold">{v.cliente ?? '—'}</span>
+                      {v.nombreCliente && <span className="block truncate text-xs text-muted">{v.nombreCliente}</span>}
+                    </button>
+                  </td>
+                  <td className={cn(td, 'max-w-36 truncate')}>{promotorDe(v)}</td>
+                  <td className={td}>
+                    <span className="block">{corte > 0 ? texto.slice(0, corte) : texto}</span>
+                    {corte > 0 && <span className="block text-xs text-muted">{texto.slice(corte + 1)}</span>}
+                  </td>
+                  <td className={cn(td, 'text-center')}>
+                    {v.conCompra ? (
+                      <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                        Sí
                       </span>
-                      {compra(v)}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted">
-                      {promotorDe(v)} · {formatoFechaHora(v.momento)}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-muted tabular-nums">
-                      Tiempo {conUnidad(formatoMinutos(v.duracion), 'min')} · Nueva visita{' '}
-                      {conUnidad(formatoMinutos(v.minutosNueva ?? null), 'min')} · {conUnidad(formatoMetros(v.distancia), 'm')}
-                    </span>
-                  </button>
-                </li>
+                    ) : (
+                      <span className="text-xs text-muted">No</span>
+                    )}
+                  </td>
+                  <td className={cn(td, 'text-right')}>{formatoMinutos(v.duracion)}</td>
+                  <td className={cn(td, 'text-right')}>{formatoMinutos(v.minutosNueva ?? null)}</td>
+                  <td className={cn(td, 'text-right')}>{formatoMetros(v.distancia)}</td>
+                </tr>
               )
             })}
-          </ul>
-        )}
+          </tbody>
+        </table>
       </div>
       {visitas.length > MAX_FILAS_DETALLE && (
         <p className="border-t border-line px-4 py-2 text-xs text-muted">
@@ -395,10 +361,10 @@ function Cuestionario({
   } else {
     cuerpo = (
       <table className="w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-card text-xs text-muted shadow-[inset_0_-1px_0_var(--line)]">
+        <thead className={ENCABEZADO_TABLA}>
           <tr>
             {datos.columnas.map((c) => (
-              <th key={c} className="px-3 py-2 text-left font-medium whitespace-nowrap">
+              <th key={c} className="px-3 py-2.5 text-left whitespace-nowrap">
                 {c}
               </th>
             ))}
@@ -490,7 +456,7 @@ function Fuentes({ tabla, fuentes }: { tabla: string; fuentes: FuentesTablero })
       <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
         {dato('Compra autogestionada', fuentes.compra, 'no se encontró')}
         {dato('Tiempo visita', fuentes.minutosVisita, 'calculado con la tabla visitas')}
-        {dato('Tiempo nueva visita', fuentes.minutosNuevaVisita, 'calculado con la tabla visitas')}
+        {dato('Tiempo entre visitas', fuentes.minutosNuevaVisita, 'calculado con la tabla visitas')}
         {dato('Geoeficiencia', fuentes.distancia, 'de la tabla visitas')}
       </ul>
     </div>
@@ -506,7 +472,7 @@ function TablaPromotores({
   seleccionados: string[]
   onSeleccionar: (id: string) => void
 }) {
-  const th = 'px-3 py-2 text-right font-medium whitespace-nowrap'
+  const th = 'px-3 py-2.5 text-right whitespace-nowrap'
   const td = 'px-3 py-2.5 text-right whitespace-nowrap'
   return (
     <Card className="overflow-hidden">
@@ -516,15 +482,15 @@ function TablaPromotores({
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="text-xs text-muted">
+          <thead className="bg-soft text-xs font-semibold text-fg">
             <tr className="border-b border-line">
-              <th className="sticky left-0 bg-card px-4 py-2 text-left font-medium">Promotor</th>
+              <th className="sticky left-0 bg-soft px-4 py-2.5 text-left">Promotor</th>
               <th className={th}>Visitas</th>
               <th className={th}>Con compra</th>
               <th className={th}>Días</th>
               <th className={th}>Visitas x día</th>
               <th className={th}>Tiempo x visita (min)</th>
-              <th className={th}>Tiempo nueva visita (min)</th>
+              <th className={th}>Tiempo entre visitas (min)</th>
               <th className={th}>Distancia (m)</th>
             </tr>
           </thead>

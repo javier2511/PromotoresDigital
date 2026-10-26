@@ -71,12 +71,12 @@ export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango:
         {verTabla ? (
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-xs text-muted">
+              <thead className="bg-soft text-xs font-semibold text-fg">
                 <tr className="border-b border-line">
-                  <th className="py-2 pr-3 text-left font-medium">{porHora ? 'Hora' : 'Día'}</th>
-                  <th className="px-3 py-2 text-right font-medium">Visitas</th>
-                  <th className="px-3 py-2 text-right font-medium">Con compra</th>
-                  <th className="py-2 pl-3 text-right font-medium">% con compra</th>
+                  <th className="py-2.5 pr-3 pl-2 text-left">{porHora ? 'Hora' : 'Día'}</th>
+                  <th className="px-3 py-2.5 text-right">Visitas</th>
+                  <th className="px-3 py-2.5 text-right">Con compra</th>
+                  <th className="py-2.5 pr-2 pl-3 text-right">% con compra</th>
                 </tr>
               </thead>
               <tbody className="tabular-nums">
@@ -84,10 +84,10 @@ export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango:
                   .filter((b) => !b.futuro)
                   .map((b) => (
                     <tr key={b.clave} className="border-b border-line last:border-0">
-                      <td className="py-2 pr-3">{titulo(b)}</td>
+                      <td className="py-2 pr-3 pl-2">{titulo(b)}</td>
                       <td className="px-3 py-2 text-right">{b.visitas}</td>
                       <td className="px-3 py-2 text-right">{b.conCompra}</td>
-                      <td className="py-2 pl-3 text-right">{b.visitas ? `${porcentaje(b.conCompra, b.visitas)}%` : '—'}</td>
+                      <td className="py-2 pr-2 pl-3 text-right">{b.visitas ? `${porcentaje(b.conCompra, b.visitas)}%` : '—'}</td>
                     </tr>
                   ))}
               </tbody>

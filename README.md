@@ -214,7 +214,7 @@ quieras de esa semana) o mes:
 | Visitas diarias por figura con compra | Lo mismo, solo con las visitas con compra. |
 | Tiempo x Visita (min) | Promedio de la columna de minutos de visita (p. ej. `tiempo_visita`). |
 | Tiempo x Visita con compra (min) | Lo mismo, solo con las visitas con compra. |
-| Tiempo nueva visita (min) | Promedio de la columna de minutos a la siguiente visita (p. ej. `tiempo_nueva_visita`). |
+| Tiempo entre visitas (min) | Promedio de la columna de minutos entre una visita y la siguiente (p. ej. `tiempo_nueva_visita`). |
 | Distancia (m) geoeficiencia | Promedio de la columna de distancia al check-in (p. ej. `distancia_checkin`). |
 
 Los minutos y la distancia se toman **tal cual** de `resultados_visitas`. Las columnas se reconocen por su nombre
