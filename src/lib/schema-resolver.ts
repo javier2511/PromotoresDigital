@@ -1,7 +1,8 @@
 import type { PostgrestError, User } from '@supabase/supabase-js'
-import { ROLES_ADMIN, schema, type Schema, type TableSpec } from '../config/schema'
+import { ROLES_ADMIN, ROLES_LIDER, schema, type Schema, type TableSpec } from '../config/schema'
 import { isNetworkError } from './errors'
 import { supabase, type Row } from './supabase'
+import { normalize } from './text'
 
 export type TableKey = keyof Schema
 type FieldsOf<K extends TableKey> = Schema[K] extends TableSpec<infer F> ? F : never
@@ -43,8 +44,10 @@ export interface Perfil {
   conUbicacion?: boolean
   /** Texto de la columna "ubicacion", si tiene (p. ej. "LatLng(lat: …, lng: …)" que guardaba FlutterFlow). */
   ubicacionTexto?: string | null
-  /** Columna rol (p. ej. 'promotor' o 'admin'). */
+  /** Columna rol (p. ej. 'promotor', 'lider' o 'admin'). */
   rol?: string | null
+  /** Columna region (supabase/14_lideres_por_region.sql). */
+  region?: string | null
 }
 
 export interface SchemaContext {
@@ -199,6 +202,8 @@ async function resolvePerfil(t: ResolvedTable<FieldsOf<'perfiles'>>, user: User)
       const { latitud, longitud, ubicacion } = t.columns
       const vacio = (col: string) => row[col] === null || row[col] === undefined || String(row[col]).trim() === ''
       // Lo que cuenta son latitud y longitud; la columna de texto solo si no existen esas dos.
+      // La columna region pudo crearse después de detectar las tablas: también se busca en la fila.
+      const region = t.columns.region ?? ('region' in row ? 'region' : undefined)
       const coordenadas = [latitud, longitud].filter((c): c is string => Boolean(c))
       const conUbicacion =
         coordenadas.length > 0 ? coordenadas.every((c) => !vacio(c)) : ubicacion ? !vacio(ubicacion) : true
@@ -208,6 +213,7 @@ async function resolvePerfil(t: ResolvedTable<FieldsOf<'perfiles'>>, user: User)
         conUbicacion,
         ubicacionTexto: ubicacion && !vacio(ubicacion) ? String(row[ubicacion]) : null,
         rol: t.columns.rol && !vacio(t.columns.rol) ? String(row[t.columns.rol]) : null,
+        region: region && !vacio(region) ? String(row[region]).trim() : null,
       }
     }
   }
@@ -353,3 +359,11 @@ export function esAdmin(ctx: Pick<SchemaContext, 'perfil'> | undefined): boolean
   const rol = ctx?.perfil?.rol
   return Boolean(rol && ROLES_ADMIN.includes(rol.trim().toLowerCase()))
 }
+
+/** ¿Es líder (rol en ROLES_LIDER)? Ve el Tablero y los Resultados de su región; la base decide qué filas. */
+export function esLider(ctx: Pick<SchemaContext, 'perfil'> | undefined): boolean {
+  return ROLES_LIDER.includes(normalize(ctx?.perfil?.rol))
+}
+
+/** Administradores y líderes ven el Tablero y los Resultados de su equipo (todos o los de su región). */
+export const veEquipo = (ctx: Pick<SchemaContext, 'perfil'> | undefined) => esAdmin(ctx) || esLider(ctx)

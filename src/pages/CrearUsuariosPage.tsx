@@ -9,7 +9,7 @@ import { Button, ButtonLink } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Spinner } from '../components/ui/Spinner'
 import { useSchema } from '../data/hooks'
-import { crearUsuarios, FaltaCrearUsuarios, type ResultadoUsuario } from '../data/usuarios'
+import { crearUsuarios, FaltaAsignarRegion, FaltaCrearUsuarios, type ResultadoUsuario } from '../data/usuarios'
 import { friendlyError } from '../lib/errors'
 import { esAdmin } from '../lib/schema-resolver'
 import { plural } from '../lib/text'
@@ -31,8 +31,13 @@ function Estado({ u, resultado }: { u: UsuarioPorCrear; resultado?: ResultadoUsu
   if (u.error || resultado?.estado === 'error') return <Badge tone="danger">Revisar</Badge>
   if (resultado?.estado === 'creado') return <Badge tone="success">Creado</Badge>
   if (resultado?.estado === 'ya_existe') return <Badge tone="info">Ya tenía cuenta</Badge>
+  if (resultado?.estado === 'region') return <Badge tone="success">Región asignada</Badge>
+  if (resultado?.estado === 'sin_cuenta') return <Badge tone="warning">Sin cuenta</Badge>
   return <Badge>Listo</Badge>
 }
+
+/** Ya no hay nada que hacer con ese renglón (los errores se pueden reintentar). */
+const HECHOS: ResultadoUsuario['estado'][] = ['creado', 'ya_existe', 'region', 'sin_cuenta']
 
 /** Solo administradores: crea varias cuentas de promotores a la vez, pegando la lista de Excel. */
 export function CrearUsuariosPage() {
@@ -46,7 +51,7 @@ export function CrearUsuariosPage() {
   const [resultados, setResultados] = useState<Record<string, ResultadoUsuario>>({})
   const [avance, setAvance] = useState<{ hechos: number; total: number } | null>(null)
   const [terminado, setTerminado] = useState(false)
-  const [faltaSql, setFaltaSql] = useState(false)
+  const [faltaSql, setFaltaSql] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const { usuarios } = useMemo(() => leerUsuarios(texto), [texto])
 
@@ -60,16 +65,23 @@ export function CrearUsuariosPage() {
   if (!esAdmin(ctx)) return <Navigate to="/" replace />
 
   const resultadoDe = (u: UsuarioPorCrear) => (u.error ? undefined : resultados[u.correo])
-  const porCrear = usuarios.filter((u) => !u.error && !['creado', 'ya_existe'].includes(resultadoDe(u)?.estado ?? ''))
+  const porCrear = usuarios.filter((u) => {
+    const estado = resultadoDe(u)?.estado
+    return !u.error && !(estado && HECHOS.includes(estado))
+  })
+  const soloRegiones = porCrear.filter((u) => u.soloRegion).length
+  const nuevos = porCrear.length - soloRegiones
   const conError = usuarios.filter((u) => u.error).length
   const cuantos = (estado: ResultadoUsuario['estado']) => usuarios.filter((u) => resultadoDe(u)?.estado === estado).length
   const creados = cuantos('creado')
   const yaExistian = cuantos('ya_existe')
+  const regiones = cuantos('region')
+  const sinCuenta = cuantos('sin_cuenta')
   const fallaron = cuantos('error')
 
   const crear = async () => {
     setError(null)
-    setFaltaSql(false)
+    setFaltaSql(null)
     setTerminado(false)
     setAvance({ hechos: 0, total: porCrear.length })
     try {
@@ -79,7 +91,8 @@ export function CrearUsuariosPage() {
       })
       setTerminado(true)
     } catch (e) {
-      if (e instanceof FaltaCrearUsuarios) setFaltaSql(true)
+      if (e instanceof FaltaCrearUsuarios) setFaltaSql('supabase/13_crear_usuarios.sql')
+      else if (e instanceof FaltaAsignarRegion) setFaltaSql('supabase/14_lideres_por_region.sql')
       else setError(friendlyError(e))
     } finally {
       setAvance(null)
@@ -102,6 +115,8 @@ export function CrearUsuariosPage() {
   const resumen = [
     creados && plural(creados, 'creado'),
     yaExistian && `${yaExistian} ya ${yaExistian === 1 ? 'tenía' : 'tenían'} cuenta`,
+    regiones && `${regiones} ${regiones === 1 ? 'región asignada' : 'regiones asignadas'}`,
+    sinCuenta && `${sinCuenta} sin cuenta`,
     fallaron && `${fallaron} con error`,
   ].filter(Boolean)
 
@@ -115,8 +130,8 @@ export function CrearUsuariosPage() {
           </h2>
           <p className="mt-1.5 text-sm text-muted">
             Pon en Excel tres columnas: <strong className="text-fg">Nombre</strong>, <strong className="text-fg">Correo</strong>{' '}
-            y <strong className="text-fg">Contraseña</strong> (la fila de títulos es opcional). Selecciona las celdas, cópialas y
-            pégalas aquí.
+            y <strong className="text-fg">Contraseña</strong> (la fila de títulos es opcional) y, si quieres, una cuarta:{' '}
+            <strong className="text-fg">Región</strong>. Selecciona las celdas, cópialas y pégalas aquí.
           </p>
           <textarea
             value={texto}
@@ -155,7 +170,8 @@ export function CrearUsuariosPage() {
           </div>
           <p className="mt-3 text-xs text-muted">
             El correo es con el que entran a la app. No se les envía ningún correo, así que puedes inventarles uno (por ejemplo
-            luis.perez@tuempresa.com). Si un correo ya tiene cuenta, no se le cambia la contraseña.
+            luis.perez@tuempresa.com). Si un correo ya tiene cuenta, no se le cambia la contraseña (sí la región, si la pusiste).
+            Para solo asignar regiones a quienes ya tienen cuenta, pega dos columnas con títulos: Correo y Región.
           </p>
         </Card>
 
@@ -181,15 +197,28 @@ export function CrearUsuariosPage() {
             <ul id="usuarios-por-crear" className="divide-y divide-line">
               {usuarios.map((u) => {
                 const resultado = resultadoDe(u)
-                const mensaje = u.error ?? (resultado?.estado === 'error' ? resultado.mensaje : null)
+                const mensaje =
+                  u.error ??
+                  (resultado?.estado === 'error'
+                    ? resultado.mensaje
+                    : resultado?.estado === 'sin_cuenta'
+                      ? 'No tiene cuenta: agrega su nombre y contraseña para crearla.'
+                      : null)
                 const contrasena = verContrasenas ? u.contrasena : '•'.repeat(Math.min(u.contrasena.length, 12))
                 return (
                   <li key={u.renglon} data-usuario={u.correo} className="flex items-start gap-3 px-4 py-3">
                     <span className="w-5 shrink-0 pt-0.5 text-right text-xs text-muted tabular-nums">{u.renglon}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{u.nombre || '—'}</p>
+                      <p className="truncate font-semibold">{u.nombre || (u.soloRegion ? 'Solo región' : '—')}</p>
                       <p className="text-sm break-words text-muted">
-                        {u.correo || 'sin correo'} · <span className="font-mono">{contrasena || '—'}</span>
+                        {u.correo || 'sin correo'}
+                        {!u.soloRegion && (
+                          <>
+                            {' · '}
+                            <span className="font-mono">{contrasena || '—'}</span>
+                          </>
+                        )}
+                        {u.region && ` · Región ${u.region}`}
                       </p>
                       {mensaje && <p className="mt-0.5 text-sm text-red-600 dark:text-red-400">{mensaje}</p>}
                     </div>
@@ -228,10 +257,14 @@ export function CrearUsuariosPage() {
               onClick={crear}
             >
               {avance
-                ? `Creando ${avance.hechos} de ${avance.total}…`
-                : porCrear.length
-                  ? `Crear ${plural(porCrear.length, 'usuario')}`
-                  : 'No hay usuarios por crear'}
+                ? `Guardando ${avance.hechos} de ${avance.total}…`
+                : !porCrear.length
+                  ? 'No hay usuarios por crear'
+                  : !soloRegiones
+                    ? `Crear ${plural(nuevos, 'usuario')}`
+                    : !nuevos
+                      ? `Asignar región a ${plural(soloRegiones, 'usuario')}`
+                      : `Crear ${plural(nuevos, 'usuario')} y asignar ${soloRegiones === 1 ? '1 región' : `${soloRegiones} regiones`}`}
             </Button>
             {avance && (
               <div className="h-2 overflow-hidden rounded-full bg-soft" aria-hidden>
@@ -243,8 +276,8 @@ export function CrearUsuariosPage() {
             )}
             {faltaSql && (
               <Alert icon={<TriangleAlert />}>
-                Falta un paso en Supabase: ejecuta una vez <code className="font-mono">supabase/13_crear_usuarios.sql</code> (SQL
-                Editor → New query → pega el archivo → Run) y vuelve a intentarlo.
+                Falta un paso en Supabase: ejecuta una vez <code className="font-mono">{faltaSql}</code> (SQL Editor → New query →
+                pega el archivo → Run) y vuelve a intentarlo.
               </Alert>
             )}
             {error && <Alert icon={<TriangleAlert />}>{error}</Alert>}

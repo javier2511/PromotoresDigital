@@ -118,7 +118,17 @@ export type ResultadoField =
   | 'distancia'
   | 'nombreCliente'
 
-export type PerfilField = 'id' | 'authId' | 'email' | 'nombre' | 'latitud' | 'longitud' | 'ubicacion' | 'rol' | 'activo'
+export type PerfilField =
+  | 'id'
+  | 'authId'
+  | 'email'
+  | 'nombre'
+  | 'latitud'
+  | 'longitud'
+  | 'ubicacion'
+  | 'rol'
+  | 'activo'
+  | 'region'
 
 export type AsignacionField = 'id' | 'cliente' | 'usuario' | 'fecha' | 'orden' | 'estatus'
 
@@ -429,9 +439,12 @@ export const schema: Schema = {
       latitud: ['latitud', 'lat', 'latitud_registro'],
       longitud: ['longitud', 'lng', 'lon', 'longitud_registro'],
       ubicacion: ['ubicacion', 'ubicacion_registro', 'coordenadas'],
-      // Rol del usuario: con ROLES_ADMIN ve la pestaña "Equipo" (jornadas de todos los promotores).
+      // Rol del usuario: ROLES_ADMIN ve todo (Tablero, Equipo, crear usuarios); ROLES_LIDER, el Tablero y los
+      // Resultados de los promotores de su región.
       rol: ['rol', 'role', 'tipo_usuario'],
       activo: ['activo', 'activa', 'habilitado'],
+      // Región del promotor (supabase/14_lideres_por_region.sql): un líder ve a los de su misma región.
+      region: ['region', 'region_promotor'],
     },
     required: ['id'],
   },
@@ -517,8 +530,10 @@ export const VALOR_ASIGNACION_COMPLETADA = 'Completada'
  */
 export const ASIGNACIONES_SOLO_SEMANA = true
 
-/** Roles (columna rol de promotores) que ven la pestaña "Equipo"; ROL_PROMOTOR son los que aparecen en ella. */
+/** Roles (columna rol de promotores) que ven todo: Tablero, Equipo y crear usuarios. ROL_PROMOTOR son los de Equipo. */
 export const ROLES_ADMIN = ['admin', 'administrador']
+/** Roles que ven el Tablero y los Resultados solo de los promotores de su región (sin acentos: "líder" también). */
+export const ROLES_LIDER = ['lider']
 export const ROL_PROMOTOR = 'promotor'
 
 /** Valores que se guardan en las preguntas Sí/No (si la pregunta no trae sus propias opciones). */

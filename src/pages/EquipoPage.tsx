@@ -56,6 +56,7 @@ function MiembroCard({ m, esHoy, seleccionado, ahora }: { m: MiembroEquipo; esHo
         <div className="min-w-0">
           <p className="truncate text-[16px] font-semibold">{m.nombre}</p>
           {m.correo && m.correo !== m.nombre && <p className="truncate text-sm text-muted">{m.correo}</p>}
+          {m.region && <p className="truncate text-xs text-muted">Región {m.region}</p>}
         </div>
         {!j ? (
           <Badge>Sin iniciar</Badge>

@@ -3,6 +3,7 @@ import { isNetworkError } from '../lib/errors'
 import { ownerCandidates, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { toBoolean } from '../lib/text'
+import { idsDe, porGrupos, type Alcance } from './alcance'
 import { fetchAll } from './clientes'
 
 export interface Resultados {
@@ -10,9 +11,21 @@ export interface Resultados {
   rows: Row[]
   /** Cómo se filtraron las filas del usuario. */
   filtro: 'usuario' | 'clientes' | 'ninguno'
+  /** Había más de MAX_RESULTADOS: solo llegan las más recientes. */
+  limitado?: boolean
 }
 
-const MAX_ROWS = 2000
+export const MAX_RESULTADOS = 2000
+const MAX_ROWS = MAX_RESULTADOS
+
+type Consulta = ReturnType<ReturnType<typeof supabase.from>['select']>
+
+/** Orden estable para paginar: por fecha (más reciente primero) y desempate por id si existe. */
+function ordenar(t: SchemaContext['tables']['resultados'], q: Consulta) {
+  const byDate = t.columns.fecha ? q.order(t.columns.fecha, { ascending: false }) : q
+  const idCol = t.allColumns?.find((c) => ['id', 'id_resultado', 'resultado_id'].includes(c))
+  return idCol ? byDate.order(idCol, { ascending: true }) : byDate
+}
 
 /** Filas de la tabla de resultados que corresponden al usuario (por columna de usuario, o por sus clientes). */
 export async function fetchResultados(
@@ -23,12 +36,7 @@ export async function fetchResultados(
   const t = ctx.tables.resultados
   if (!t.table) return { table: null, rows: [], filtro: 'ninguno' }
   const table = t.table
-  // Orden estable para paginar: por fecha (más reciente primero) y desempate por id si existe.
-  const order = (q: ReturnType<ReturnType<typeof supabase.from>['select']>) => {
-    const byDate = t.columns.fecha ? q.order(t.columns.fecha, { ascending: false }) : q
-    const idCol = t.allColumns?.find((c) => ['id', 'id_resultado', 'resultado_id'].includes(c))
-    return idCol ? byDate.order(idCol, { ascending: true }) : byDate
-  }
+  const order = (q: Consulta) => ordenar(t, q)
 
   const userCol = t.columns.usuario
   if (userCol) {
@@ -53,6 +61,31 @@ export async function fetchResultados(
   }
   // Sin columna de usuario ni de cliente: se muestra lo que las políticas RLS permitan ver.
   return { table, rows: rows.slice(0, MAX_ROWS), filtro: 'ninguno' }
+}
+
+/**
+ * Resultados del equipo: de todos los promotores (admin) o de los de su región (líder), los más recientes primero.
+ * Un líder solo pide las filas de sus promotores; la base también lo limita (supabase/14 y 15).
+ */
+export async function fetchResultadosEquipo(ctx: SchemaContext, alcance: Alcance): Promise<Resultados> {
+  const t = ctx.tables.resultados
+  if (!t.table) return { table: null, rows: [], filtro: 'ninguno' }
+  const table = t.table
+  const userCol = t.columns.usuario
+  const ids = idsDe(alcance)
+  if (ids && !userCol) return { table, rows: [], filtro: 'usuario' }
+  const rows = await porGrupos(ids, (grupo) =>
+    fetchAll(() => {
+      const q = ordenar(t, supabase.from(table).select('*', { count: 'exact' }))
+      return grupo ? q.in(userCol!, grupo) : q
+    }),
+  )
+  // Si se pidieron por grupos de promotores, se ordenan juntos (estable: respeta el orden de la base en empates).
+  const fecha = t.columns.fecha
+  if (fecha && ids) {
+    rows.sort((a, b) => String(b[fecha] ?? '').localeCompare(String(a[fecha] ?? '')))
+  }
+  return { table, rows: rows.slice(0, MAX_ROWS), filtro: ids ? 'usuario' : 'ninguno', limitado: rows.length > MAX_ROWS }
 }
 
 export interface Resumen {

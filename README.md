@@ -208,7 +208,8 @@ app y al registrarse solo se puede crear la propia fila como promotor. Para hace
 `update public.promotores set rol = 'admin' where correo = 'correo@empresa.com';`
 
 **Crear usuarios (varios a la vez):** en **Equipo → Crear usuarios** pega de Excel las columnas **Nombre**,
-**Correo** y **Contraseña** (con o sin la fila de títulos; también se puede subir un CSV). La app revisa cada
+**Correo** y **Contraseña**, y si quieres una cuarta, **Región** (con o sin la fila de títulos; también se puede
+subir un CSV). La región se guarda con `supabase/14_lideres_por_region.sql`. La app revisa cada
 renglón (correo válido y no repetido, contraseña de al menos 6 caracteres), muestra la lista y crea solo los
 correctos. Cada cuenta queda **confirmada**: no se envía ningún correo, así que puede ser un correo inventado.
 Además se agrega en **promotores** como promotor activo; si ya estaba en promotores con ese correo (por ejemplo,
@@ -216,6 +217,32 @@ con asignaciones), la cuenta usa su mismo `id_promotor`. Si un correo ya tenía 
 contraseña). Opcional: pedirles que elijan su propia contraseña la primera vez que entren. Solo crea promotores
 (los admins se siguen poniendo con el `update` de arriba). Requiere ejecutar una vez `supabase/13_crear_usuarios.sql`
 (y antes el 10).
+
+### Líderes por región
+
+Además de `admin`, en la columna `rol` de **promotores** puedes poner `lider` (o `líder`). Ejecuta una vez
+`supabase/14_lideres_por_region.sql`: agrega la columna **region** a promotores (llénala en Table Editor, o en
+**Equipo → Crear usuarios** con una columna Región; con solo Correo y Región se les asigna a quienes ya tienen
+cuenta) y da los permisos de lectura del líder.
+
+| | Admin | Líder | Promotor |
+|---|---|---|---|
+| Clientes, Mapa, Perfil | Sí | Sí | Sí |
+| Resultados | De todos los promotores | De los de su región | Los suyos |
+| Tablero y sus descargas | De todos | De los de su región | No |
+| Equipo (jornadas) y Crear usuarios | Sí | No | No |
+
+Un líder ve a los promotores cuya `region` es igual a la suya (sin importar mayúsculas ni espacios); sin región
+no ve a nadie. Para hacer líder a alguien:
+`update public.promotores set rol = 'lider', region = 'Norte' where correo = 'correo@empresa.com';`
+
+**Importante:** `visitas` y `resultados_visitas` no tienen activada la seguridad por filas (RLS). La app solo le
+pide y le muestra al líder lo de su región, pero la base no lo impide (y cualquiera con la llave pública de la app
+podría leer esas dos tablas completas). `supabase/15_proteger_visitas.sql` la activa: cada promotor lee solo lo
+suyo, un admin todo y un líder su región; las visitas se siguen guardando igual. Antes de correrlo revisa que tu
+Power BI (u otro sistema) no lea esas tablas con la llave anon: con la conexión directa a la base o con la llave
+service_role no le afecta. Para deshacerlo:
+`alter table public.visitas disable row level security; alter table public.resultados_visitas disable row level security;`
 
 ### Administradores: pestaña Tablero
 
@@ -250,7 +277,8 @@ promotor (solo los que tienen visitas) y los botones para **descargar completas*
 `respuestas` en CSV (se abren en Excel). Hasta abajo, la **Tabla Detalle Visita** (una fila por visita) y la
 **Tabla cuestionario**: la tabla `respuestas` de Supabase tal cual, con todas sus columnas, solo de las visitas
 filtradas (al tocar una visita del detalle quedan solo sus respuestas). Para que un admin lea las
-de todos los promotores ejecuta `supabase/11_admin_tablero.sql` (requiere el 10).
+de todos los promotores ejecuta `supabase/11_admin_tablero.sql` (requiere el 10). Los líderes ven este mismo
+tablero solo con los promotores de su región (ver *Líderes por región*).
 
 ### Información del cliente (ficha)
 

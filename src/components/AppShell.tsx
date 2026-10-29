@@ -1,7 +1,7 @@
 import { ChartColumn, CircleUserRound, LayoutDashboard, Map as MapIcon, Store, Users, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet, ScrollRestoration, useMatches } from 'react-router'
 import { useClientes, useSchema } from '../data/hooks'
-import { esAdmin } from '../lib/schema-resolver'
+import { esAdmin, esLider } from '../lib/schema-resolver'
 import { useAsegurarPerfil } from '../data/perfil'
 import { useAuth } from '../providers/AuthProvider'
 import { Logo } from './Logo'
@@ -25,11 +25,9 @@ const NAV: NavItem[] = [
   { to: '/perfil', label: 'Perfil', icon: CircleUserRound },
 ]
 
-/** Solo administradores (rol admin en promotores): indicadores de las visitas y jornadas de todo el equipo. */
-const NAV_ADMIN: NavItem[] = [
-  { to: '/tablero', label: 'Tablero', icon: LayoutDashboard },
-  { to: '/equipo', label: 'Equipo', icon: Users },
-]
+/** Administradores (rol admin): indicadores de todas las visitas y jornadas del equipo. Líderes: solo el Tablero. */
+const TABLERO: NavItem = { to: '/tablero', label: 'Tablero', icon: LayoutDashboard }
+const EQUIPO: NavItem = { to: '/equipo', label: 'Equipo', icon: Users }
 
 const COLUMNAS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5', 6: 'grid-cols-6' }
 
@@ -61,7 +59,8 @@ export function AppShell() {
   const { user } = useAuth()
   const { data: ctx } = useSchema()
   useAsegurarPerfil()
-  const nav = esAdmin(ctx) ? [...NAV.slice(0, 3), ...NAV_ADMIN, NAV[3]] : NAV
+  const extra = esAdmin(ctx) ? [TABLERO, EQUIPO] : esLider(ctx) ? [TABLERO] : []
+  const nav = [...NAV.slice(0, 3), ...extra, NAV[3]]
 
   return (
     <div className="min-h-dvh">

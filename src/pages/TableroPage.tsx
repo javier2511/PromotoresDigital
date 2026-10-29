@@ -31,7 +31,8 @@ import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Skeleton } from '../components/ui/Skeleton'
 import { Spinner } from '../components/ui/Spinner'
 import { RADIO_VISITA_M } from '../config/app'
-import { leerTablaCompleta } from '../data/descargas'
+import { FaltaSqlRegiones, fetchAlcance, idsDe, SinRegion, type Alcance } from '../data/alcance'
+import { leerTablaCompleta, type FiltroDescarga } from '../data/descargas'
 import { useSchema } from '../data/hooks'
 import {
   calcularIndicadores,
@@ -62,7 +63,7 @@ import {
   rangoDe,
   type Periodo,
 } from '../lib/periodos'
-import { esAdmin, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
+import { esAdmin, veEquipo, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import type { Row } from '../lib/supabase'
 import { plural } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
@@ -323,6 +324,7 @@ function Cuestionario({
   visitas,
   visita,
   onVerTodas,
+  sqlPermisos,
 }: {
   datos: RespuestasTablero | null | undefined
   cargando: boolean
@@ -331,6 +333,8 @@ function Cuestionario({
   visitas: VisitaTablero[]
   visita: VisitaTablero | null
   onVerTodas: () => void
+  /** El SQL que da permiso de leer las respuestas de los demás (admin: 11; líder: 14). */
+  sqlPermisos: string
 }) {
   const posicion = useMemo(() => new Map(visitas.map((v, i) => [v.key, i])), [visitas])
   const filas = useMemo(() => {
@@ -349,7 +353,7 @@ function Cuestionario({
   }, [datos, visita, posicion])
   const sinPermiso = (
     <p className="mt-2 text-xs text-muted">
-      Si solo ves las respuestas de tus propias visitas, ejecuta una vez supabase/11_admin_tablero.sql en Supabase.
+      Si solo ves las respuestas de tus propias visitas, ejecuta una vez {sqlPermisos} en Supabase.
     </p>
   )
 
@@ -562,7 +566,16 @@ function TablaPromotores({
   )
 }
 
-function BotonDescarga({ tabla, titulo }: { tabla: ResolvedTable; titulo: string }) {
+function BotonDescarga({
+  tabla,
+  titulo,
+  filtro,
+}: {
+  tabla: ResolvedTable
+  titulo: string
+  /** Solo esas filas (un líder: las de los promotores de su región). */
+  filtro?: FiltroDescarga
+}) {
   const [avance, setAvance] = useState<{ leidas: number; total: number | null } | null>(null)
   const nombre = tabla.table
 
@@ -570,7 +583,7 @@ function BotonDescarga({ tabla, titulo }: { tabla: ResolvedTable; titulo: string
     if (!nombre) return
     setAvance({ leidas: 0, total: null })
     try {
-      const filas = await leerTablaCompleta(nombre, columnaLlave(tabla), (leidas, total) => setAvance({ leidas, total }))
+      const filas = await leerTablaCompleta(nombre, columnaLlave(tabla), (leidas, total) => setAvance({ leidas, total }), filtro)
       if (filas.length === 0) {
         toast.info(`${titulo}: la tabla no tiene filas que puedas ver.`)
         return
@@ -609,25 +622,31 @@ function BotonDescarga({ tabla, titulo }: { tabla: ResolvedTable; titulo: string
   )
 }
 
-function Descargas({ ctx }: { ctx: SchemaContext }) {
+function Descargas({ ctx, alcance, sqlPermisos }: { ctx: SchemaContext; alcance: Alcance; sqlPermisos: string }) {
+  const ids = idsDe(alcance)
+  const usuario = ctx.tables.resultados.columns.usuario
+  // Un líder: solo los resultados de su región (las respuestas ya las limita la base).
+  const filtro = ids ? { columna: usuario ?? '', valores: usuario ? ids : [] } : undefined
   return (
     <Card id="descargas" className="mt-6 scroll-mt-6 p-4">
       <h2 className="flex items-center gap-2 font-semibold">
-        <Download className="size-4" /> Descargar tablas completas
+        <Download className="size-4" /> {ids ? 'Descargar tablas de tu región' : 'Descargar tablas completas'}
       </h2>
-      <p className="mt-1 text-sm text-muted">Todas las filas de Supabase, sin filtros, en un archivo que se abre en Excel.</p>
+      <p className="mt-1 text-sm text-muted">
+        {alcance.tipo === 'region'
+          ? `Todas las filas de los promotores de la región ${alcance.region}, en un archivo que se abre en Excel.`
+          : 'Todas las filas de Supabase, sin filtros, en un archivo que se abre en Excel.'}
+      </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <BotonDescarga tabla={ctx.tables.resultados} titulo="Resultados de visitas" />
+        <BotonDescarga tabla={ctx.tables.resultados} titulo="Resultados de visitas" filtro={filtro} />
         <BotonDescarga tabla={ctx.tables.respuestas} titulo="Respuestas" />
       </div>
-      <p className="mt-3 text-xs text-muted">
-        Si solo salen tus propias respuestas, ejecuta una vez supabase/11_admin_tablero.sql en Supabase.
-      </p>
+      <p className="mt-3 text-xs text-muted">Si solo salen tus propias respuestas, ejecuta una vez {sqlPermisos} en Supabase.</p>
     </Card>
   )
 }
 
-/** Solo administradores: desempeño de las visitas (resultados_visitas), como el reporte de Power BI. */
+/** Administradores (todos los promotores) y líderes (los de su región): desempeño de las visitas, como el reporte de Power BI. */
 export function TableroPage() {
   const user = useUser()
   const { data: ctx, isPending: ctxPending } = useSchema()
@@ -642,13 +661,22 @@ export function TableroPage() {
   /** Visita elegida en el detalle (sus respuestas se ven en el cuestionario). */
   const [visitaKey, setVisitaKey] = useState<string | null>(null)
   const rango = useMemo(() => rangoDe(periodo, ancla), [periodo, ancla])
-  const admin = esAdmin(ctx)
+  const permitido = veEquipo(ctx)
+  const sqlPermisos = esAdmin(ctx) ? 'supabase/11_admin_tablero.sql' : 'supabase/14_lideres_por_region.sql'
   const tabla = ctx?.tables.resultados.table
 
+  // A quiénes ve: un admin, a todos; un líder, a los de su región.
+  const alcanceQuery = useQuery({
+    queryKey: ['alcance', user.id, ctx?.perfil?.rol, ctx?.perfil?.region],
+    queryFn: () => fetchAlcance(ctx!),
+    enabled: Boolean(ctx && permitido),
+    staleTime: 5 * 60_000,
+  })
+  const alcance = alcanceQuery.data
   const query = useQuery({
-    queryKey: ['tablero', user.id, rango.desde, rango.hasta],
-    queryFn: () => fetchTablero(ctx!, rango),
-    enabled: Boolean(ctx && admin && tabla),
+    queryKey: ['tablero', user.id, rango.desde, rango.hasta, alcance ? idsDe(alcance) : null],
+    queryFn: () => fetchTablero(ctx!, rango, alcance!),
+    enabled: Boolean(ctx && permitido && tabla && alcance),
     staleTime: 2 * 60_000,
     // Al cambiar de periodo se ve el anterior (atenuado) mientras llega el nuevo.
     placeholderData: keepPreviousData,
@@ -706,7 +734,7 @@ export function TableroPage() {
   }, [delPeriodo, elegidos, nombres])
 
   if (ctxPending) return null
-  if (!admin) return <Navigate to="/" replace />
+  if (!permitido) return <Navigate to="/" replace />
 
   const irA = (fecha: string) => {
     setAncla(fecha)
@@ -743,7 +771,7 @@ export function TableroPage() {
     <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
       <PageTitle
         title="Tablero"
-        subtitle="Resultados de las visitas"
+        subtitle={alcance?.tipo === 'region' ? `Resultados de las visitas · Región ${alcance.region}` : 'Resultados de las visitas'}
         actions={
           <>
             <button
@@ -864,7 +892,18 @@ export function TableroPage() {
         )}
       </div>
 
-      {!tabla ? (
+      {alcanceQuery.error instanceof FaltaSqlRegiones || alcanceQuery.error instanceof SinRegion ? (
+        <EmptyState
+          icon={MapPin}
+          title={alcanceQuery.error instanceof SinRegion ? 'Sin región asignada' : 'Falta un paso en Supabase'}
+        >
+          {alcanceQuery.error.message}
+        </EmptyState>
+      ) : alcanceQuery.isError ? (
+        <div className="mt-5">
+          <ErrorState error={alcanceQuery.error} onRetry={() => alcanceQuery.refetch()} />
+        </div>
+      ) : !tabla ? (
         <EmptyState icon={FileSpreadsheet} title="No se encontró la tabla de resultados">
           El tablero lee la tabla resultados_visitas de Supabase. Revisa en Perfil → Verificar conexión.
         </EmptyState>
@@ -890,7 +929,7 @@ export function TableroPage() {
               {datos.sinDetalle === 1
                 ? '1 visita de resultados_visitas no aparece en la tabla visitas, así que no tiene tiempos ni distancia.'
                 : `${formatoEntero(datos.sinDetalle)} visitas de resultados_visitas no aparecen en la tabla visitas, así que no tienen tiempos ni distancia.`}{' '}
-              Si aún no lo haces, ejecuta supabase/11_admin_tablero.sql en Supabase.
+              Si aún no lo haces, ejecuta {sqlPermisos} en Supabase.
             </Alert>
           )}
 
@@ -922,7 +961,7 @@ export function TableroPage() {
         </div>
       )}
 
-      {ctx && <Descargas ctx={ctx} />}
+      {ctx && alcance && <Descargas ctx={ctx} alcance={alcance} sqlPermisos={sqlPermisos} />}
 
       {/* Las tablas de detalle, hasta abajo. */}
       {datos && visibles.length > 0 && (
@@ -935,6 +974,7 @@ export function TableroPage() {
             visitas={recientes}
             visita={visita}
             onVerTodas={() => setVisitaKey(null)}
+            sqlPermisos={sqlPermisos}
           />
         </div>
       )}

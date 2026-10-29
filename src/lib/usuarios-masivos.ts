@@ -12,6 +12,10 @@ export interface UsuarioPorCrear {
   nombre: string
   correo: string
   contrasena: string
+  /** Región (opcional). */
+  region: string
+  /** Sin contraseña pero con región: solo se le asigna la región (si ya tiene cuenta). */
+  soloRegion: boolean
   /** Por qué no se puede crear (null: está listo). */
   error: string | null
 }
@@ -67,6 +71,7 @@ export function leerCeldas(texto: string): string[][] {
 const TITULOS = {
   correo: ['correo', 'email', 'e-mail', 'mail'],
   contrasena: ['contrasena', 'contrasenia', 'password', 'clave', 'pass'],
+  region: ['region'],
   nombre: ['nombre', 'name', 'promotor', 'usuario'],
 }
 const esTitulo = (celda: string, palabras: string[]) => palabras.some((p) => normalize(celda).includes(p))
@@ -83,6 +88,7 @@ function columnas(filas: string[][], conTitulos: boolean) {
     conTitulos ? tomar(libres.find((i) => esTitulo(filas[0][i] ?? '', palabras)) ?? -1) : -1
   let correo = porTitulo(TITULOS.correo)
   let contrasena = porTitulo(TITULOS.contrasena)
+  let region = porTitulo(TITULOS.region)
   let nombre = porTitulo(TITULOS.nombre)
   // Sin título: el correo es la columna que trae arrobas.
   if (correo < 0) {
@@ -94,39 +100,54 @@ function columnas(filas: string[][], conTitulos: boolean) {
   const adivinar = !conTitulos || ancho <= 3
   if (nombre < 0 && adivinar && libres.length) nombre = tomar(libres[0])
   if (contrasena < 0 && adivinar && libres.length) contrasena = tomar(libres[0])
-  return { nombre, correo, contrasena }
+  // Sin títulos, la región es la cuarta columna; con títulos, solo la que se llama "Región".
+  if (region < 0 && !conTitulos && libres.length) region = tomar(libres[0])
+  return { nombre, correo, contrasena, region }
 }
 
-function errorDe(u: Omit<UsuarioPorCrear, 'error'>, vistos: Map<string, number>): string | null {
-  if (!u.nombre) return 'Falta el nombre'
+function errorDe(u: Omit<UsuarioPorCrear, 'error'>, vistos: Map<string, number>, soloRegiones: boolean): string | null {
+  // Una lista de solo Correo y Región (sin columna de contraseña) es para asignar regiones.
+  if (soloRegiones && !u.region) return 'Falta la región'
+  if (!u.soloRegion && !u.nombre) return 'Falta el nombre'
   if (!u.correo) return 'Falta el correo'
   if (!CORREO.test(u.correo)) return 'El correo no es válido'
-  if (!u.contrasena) return 'Falta la contraseña'
-  if (u.contrasena.length < MIN_CONTRASENA) return `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`
+  if (!u.soloRegion && !u.contrasena) return 'Falta la contraseña'
+  if (!u.soloRegion && u.contrasena.length < MIN_CONTRASENA) {
+    return `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres`
+  }
   const antes = vistos.get(u.correo)
   if (antes) return `Correo repetido (renglón ${antes})`
   vistos.set(u.correo, u.renglon)
   return null
 }
 
-/** Lee la lista de usuarios (Nombre, Correo, Contraseña; con o sin títulos, en cualquier orden si tiene títulos). */
+/**
+ * Lee la lista de usuarios: Nombre, Correo, Contraseña y Región (opcional); con o sin títulos, en cualquier orden si
+ * tiene títulos. Un renglón con correo y región pero sin contraseña solo asigna la región.
+ */
 export function leerUsuarios(texto: string): ListaUsuarios {
   const filas = leerCeldas(texto)
   if (filas.length === 0) return { usuarios: [], conTitulos: false }
   const primera = filas[0]
   const conTitulos =
-    primera.every((c) => !c.includes('@')) && primera.some((c) => esTitulo(c, [...TITULOS.correo, ...TITULOS.contrasena]))
+    primera.every((c) => !c.includes('@')) &&
+    primera.some((c) => esTitulo(c, [...TITULOS.correo, ...TITULOS.contrasena, ...TITULOS.region]))
   const col = columnas(filas, conTitulos)
   const celda = (f: string[], i: number) => (i >= 0 ? (f[i] ?? '') : '')
   const vistos = new Map<string, number>()
+  const soloRegiones = col.contrasena < 0 && col.region >= 0
   const usuarios = (conTitulos ? filas.slice(1) : filas).map((f, i) => {
+    const contrasena = celda(f, col.contrasena)
+    const region = celda(f, col.region)
     const u = {
       renglon: i + 1,
       nombre: celda(f, col.nombre),
       correo: celda(f, col.correo).toLowerCase(),
-      contrasena: celda(f, col.contrasena),
+      contrasena,
+      region,
+      soloRegion: !contrasena && Boolean(region),
     }
-    return { ...u, error: errorDe(u, vistos) }
+    return { ...u, error: errorDe(u, vistos, soloRegiones) }
   })
   return { usuarios, conTitulos }
 }

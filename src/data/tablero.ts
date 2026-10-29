@@ -11,6 +11,7 @@ import { diasDelRango, isoLocal, rangoDe, sumarDias, type Rango } from '../lib/p
 import { isMissingColumnError, pickColumns, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { esVacio, toBoolean } from '../lib/text'
+import { idsDe, porGrupos, type Alcance } from './alcance'
 import { fetchAll } from './clientes'
 
 /** Una visita de resultados_visitas (minutos y distancia de sus columnas, o calculados con su fila en visitas). */
@@ -442,39 +443,43 @@ async function enParalelo<T>(tareas: (() => Promise<T>)[], n = EN_PARALELO): Pro
 }
 
 /**
- * Datos del tablero para el rango: resultados_visitas (con un día de margen por las zonas horarias), los
- * promotores (nombres) y, solo si resultados_visitas no trae los minutos o la distancia, sus filas de visitas.
+ * Datos del tablero para el rango: resultados_visitas (con un día de margen por las zonas horarias) de los
+ * promotores del alcance (un admin, todos; un líder, los de su región), sus nombres y, solo si resultados_visitas
+ * no trae los minutos o la distancia, sus filas de visitas.
  */
-export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<DatosTablero> {
+export async function fetchTablero(ctx: SchemaContext, rango: Rango, alcance: Alcance): Promise<DatosTablero> {
   const tr = ctx.tables.resultados
   const tv = ctx.tables.visitas
-  const tp = ctx.tables.perfiles
   if (!tr.table) throw new Error('No se encontró la tabla resultados_visitas.')
   const cv = tv.columns
   const tablaR = tr.table
   const llave = columnaLlave(tr)
   const fechaR = tr.columns.fecha
+  const usuarioR = tr.columns.usuario
+  // Un líder solo pide las filas de los promotores de su región (sin columna de promotor no se puede: ninguna).
+  const idsPromotores = idsDe(alcance)
+  const filtroPromotores = idsPromotores && !usuarioR ? [] : idsPromotores
 
   const leerResultados = (conFecha: boolean) =>
-    fetchAll(() => {
-      let q = supabase.from(tablaR).select('*', { count: 'exact' })
-      // En "total" se leen todas; si no, el periodo con un día de margen.
-      if (conFecha && fechaR && rango.periodo !== 'total') {
-        q = q.gte(fechaR, sumarDias(rango.desde, -1)).lt(fechaR, sumarDias(rango.hasta, 1))
-      }
-      return llave ? q.order(llave, { ascending: true }) : q
-    })
-  const [resultados, promotores] = await Promise.all([
-    leerResultados(true).catch((error: unknown) => {
-      // La columna de fecha se supuso y no existe: se leen todas.
-      if (error && typeof error === 'object' && isMissingColumnError(error as { code: string; message: string })) {
-        return leerResultados(false)
-      }
-      throw error
-    }),
-    // Solo para los nombres: si no se pueden leer, se muestra el id.
-    tp.table && tp.columns.id ? leerPromotores(ctx).catch(() => []) : Promise.resolve([]),
-  ])
+    porGrupos(filtroPromotores, (grupo) =>
+      fetchAll(() => {
+        let q = supabase.from(tablaR).select('*', { count: 'exact' })
+        if (grupo && usuarioR) q = q.in(usuarioR, grupo)
+        // En "total" se leen todas; si no, el periodo con un día de margen.
+        if (conFecha && fechaR && rango.periodo !== 'total') {
+          q = q.gte(fechaR, sumarDias(rango.desde, -1)).lt(fechaR, sumarDias(rango.hasta, 1))
+        }
+        return llave ? q.order(llave, { ascending: true }) : q
+      }),
+    )
+  const resultados = await leerResultados(true).catch((error: unknown) => {
+    // La columna de fecha se supuso y no existe: se leen todas.
+    if (error && typeof error === 'object' && isMissingColumnError(error as { code: string; message: string })) {
+      return leerResultados(false)
+    }
+    throw error
+  })
+  const promotores = alcance.promotores
 
   // Las columnas se leen de las filas que llegaron (la tabla pudo cambiar desde que se detectó).
   const claves = resultados.length ? Object.keys(resultados[0]) : (tr.allColumns ?? [])
@@ -544,17 +549,6 @@ export async function fetchTablero(ctx: SchemaContext, rango: Rango): Promise<Da
       distancia: cr.distancia ?? null,
     },
   }
-}
-
-async function leerPromotores(ctx: SchemaContext): Promise<PromotorTablero[]> {
-  const t = ctx.tables.perfiles
-  const c = t.columns
-  const filas = await fetchAll(() => supabase.from(t.table!).select('*', { count: 'exact' }).order(c.id!, { ascending: true }))
-  return filas.map((row) => {
-    const nombre = c.nombre && !esVacio(row[c.nombre]) ? String(row[c.nombre]).trim() : null
-    const correo = c.email && !esVacio(row[c.email]) ? String(row[c.email]).trim() : null
-    return { id: String(row[c.id!]), nombre: nombre ?? correo ?? String(row[c.id!]) }
-  })
 }
 
 /** La tabla respuestas tal cual (solo las filas de las visitas pedidas). */

@@ -3,18 +3,47 @@ import { supabase, type Row } from '../lib/supabase'
 const PAGINA = 1000
 const EN_PARALELO = 4
 
+/** Solo las filas con estos valores en la columna (p. ej. los promotores de la región de un líder). */
+export interface FiltroDescarga {
+  columna: string
+  valores: string[]
+}
+
+const GRUPO_VALORES = 100
+
 /**
- * Todas las filas de una tabla, en orden estable por `orden` (la llave). Avisa el avance con `onAvance`.
- * Las páginas se piden de a varias a la vez; su tamaño es el que entregó Supabase en la primera
- * (si el servidor limita a menos filas, así no quedan huecos).
+ * Todas las filas de una tabla (o solo las del filtro), en orden estable por `orden` (la llave). Avisa el avance
+ * con `onAvance`. Con filtro se pide por grupos de valores, para no exceder el largo de la URL.
  */
 export async function leerTablaCompleta(
   tabla: string,
   orden: string | undefined,
   onAvance?: (leidas: number, total: number | null) => void,
+  filtro?: FiltroDescarga,
+): Promise<Row[]> {
+  if (!filtro) return leerPaginas(tabla, orden, null, onAvance)
+  const filas: Row[] = []
+  for (let i = 0; i < filtro.valores.length; i += GRUPO_VALORES) {
+    const grupo = { columna: filtro.columna, valores: filtro.valores.slice(i, i + GRUPO_VALORES) }
+    const previas = filas.length
+    filas.push(...(await leerPaginas(tabla, orden, grupo, (leidas) => onAvance?.(previas + leidas, null))))
+  }
+  return filas
+}
+
+/**
+ * Las páginas se piden de a varias a la vez; su tamaño es el que entregó Supabase en la primera
+ * (si el servidor limita a menos filas, así no quedan huecos).
+ */
+async function leerPaginas(
+  tabla: string,
+  orden: string | undefined,
+  filtro: FiltroDescarga | null,
+  onAvance?: (leidas: number, total: number | null) => void,
 ): Promise<Row[]> {
   const consulta = (conConteo: boolean) => {
-    const q = supabase.from(tabla).select('*', conConteo ? { count: 'exact' } : undefined)
+    let q = supabase.from(tabla).select('*', conConteo ? { count: 'exact' } : undefined)
+    if (filtro) q = q.in(filtro.columna, filtro.valores)
     return orden ? q.order(orden, { ascending: true }) : q
   }
   const primera = await consulta(true).range(0, PAGINA - 1)

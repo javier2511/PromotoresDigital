@@ -18,7 +18,7 @@ import { columnasInternas, resolverInfoCliente } from '../lib/info-cliente'
 import { leerUltimoError } from '../lib/errors'
 import { hoyLocal, partesPeriodo } from '../lib/periodos'
 import { describirRegla } from '../lib/rules'
-import { clearSchemaCache, esAdmin, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
+import { clearSchemaCache, esAdmin, esLider, loadSchema, type ResolvedTable } from '../lib/schema-resolver'
 import { useUser } from '../providers/AuthProvider'
 import { useGeo } from '../providers/GeoProvider'
 
@@ -437,8 +437,15 @@ export function DiagnosticoPage() {
                   <strong className="text-amber-600">no se encontró</strong>
                 ) : (
                   <>
-                    rol <strong className="text-fg">{ctx.perfil.rol ?? '—'}</strong>
-                    {esAdmin(ctx) ? ' → ves la pestaña Equipo' : ' (para ver Equipo debe ser admin)'}
+                    rol <strong className="text-fg">{ctx.perfil.rol ?? '—'}</strong>, región{' '}
+                    <strong className="text-fg">{ctx.perfil.region ?? '—'}</strong>
+                    {esAdmin(ctx)
+                      ? ' → ves Tablero, Resultados y Equipo de todos y puedes crear usuarios'
+                      : esLider(ctx)
+                        ? ctx.perfil.region
+                          ? ` → ves Tablero y Resultados de la región ${ctx.perfil.region}`
+                          : ' → como líder necesitas una región para ver a tu equipo'
+                        : ' (admin: ve todo; lider: ve su región)'}
                   </>
                 )}
               </p>

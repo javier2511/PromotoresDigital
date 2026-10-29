@@ -11,7 +11,7 @@ import { Button } from '../components/ui/Button'
 import { APP_NAME, APP_VERSION, RADIO_VISITA_M } from '../config/app'
 import { useClientes, useSchema } from '../data/hooks'
 import { formatDistance } from '../lib/geo'
-import { esAdmin } from '../lib/schema-resolver'
+import { esAdmin, esLider } from '../lib/schema-resolver'
 import { initials } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
 import { useGeo } from '../providers/GeoProvider'
@@ -61,8 +61,11 @@ export function PerfilPage() {
           <p className="truncate text-lg font-semibold capitalize">{nombre}</p>
           <p className="truncate text-sm text-muted">{user.email}</p>
           {ctx?.perfil?.rol && (
-            <p className="mt-1">
-              <Badge tone={esAdmin(ctx) ? 'brand' : 'neutral'}>{esAdmin(ctx) ? 'Administrador' : ctx.perfil.rol}</Badge>
+            <p className="mt-1 flex flex-wrap gap-1.5">
+              <Badge tone={esAdmin(ctx) || esLider(ctx) ? 'brand' : 'neutral'}>
+                {esAdmin(ctx) ? 'Administrador' : esLider(ctx) ? 'Líder' : ctx.perfil.rol}
+              </Badge>
+              {ctx.perfil.region && <Badge>Región {ctx.perfil.region}</Badge>}
             </p>
           )}
         </div>

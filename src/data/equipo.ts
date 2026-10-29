@@ -19,6 +19,8 @@ export interface MiembroEquipo {
   id: Id
   nombre: string
   correo: string | null
+  /** Región (supabase/14_lideres_por_region.sql), si tiene. */
+  region: string | null
   /** Jornada más reciente del día (null si no la inició). */
   jornada: JornadaEquipo | null
 }
@@ -59,6 +61,8 @@ export async function fetchEquipo(ctx: SchemaContext, fecha: string): Promise<Eq
     const key = String(row[cj.usuario])
     if (!porUsuario.has(key)) porUsuario.set(key, row)
   }
+  // La columna region pudo crearse después de detectar las tablas: también se busca en las filas.
+  const colRegion = cp.region ?? (promotores.length && 'region' in promotores[0] ? 'region' : undefined)
   const punto = (lat?: string, lng?: string) => (row: Row) =>
     lat && lng ? locationFromColumns(row[lat], row[lng]) : null
 
@@ -79,6 +83,7 @@ export async function fetchEquipo(ctx: SchemaContext, fecha: string): Promise<Eq
         id,
         nombre: nombre ?? correo ?? String(id),
         correo,
+        region: colRegion && !esVacio(row[colRegion]) ? String(row[colRegion]).trim() : null,
         jornada: jr
           ? {
               inicio: String(jr[cj.inicio!]),

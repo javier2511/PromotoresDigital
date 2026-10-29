@@ -25,7 +25,7 @@ describe('leerUsuarios', () => {
     const lista = leerUsuarios('Correo electrónico\tTeléfono\tNombre del promotor\tClave\nLuis@Empresa.com \t555\t Luis Pérez\tLuis2026')
     expect(lista.conTitulos).toBe(true)
     expect(lista.usuarios).toEqual([
-      { renglon: 1, nombre: 'Luis Pérez', correo: 'luis@empresa.com', contrasena: 'Luis2026', error: null },
+      { renglon: 1, nombre: 'Luis Pérez', correo: 'luis@empresa.com', contrasena: 'Luis2026', region: '', soloRegion: false, error: null },
     ])
   })
 
@@ -62,6 +62,23 @@ describe('leerUsuarios', () => {
       [5, 'La contraseña debe tener al menos 6 caracteres'],
       [6, 'Falta la contraseña'],
       [7, 'Correo repetido (renglón 1)'],
+    ])
+  })
+
+  it('región: por título, o la cuarta columna sin títulos', () => {
+    const conTitulos = leerUsuarios('Región\tNombre\tCorreo\tContraseña\nNorte\tLuis\tluis@empresa.com\tLuis2026')
+    expect(conTitulos.usuarios.map((u) => [u.nombre, u.region, u.soloRegion, u.error])).toEqual([['Luis', 'Norte', false, null]])
+    expect(leerUsuarios('Luis\tluis@empresa.com\tLuis2026\t Centro ').usuarios[0].region).toBe('Centro')
+    expect(leerUsuarios('Luis\tluis@empresa.com\tLuis2026').usuarios[0].region).toBe('')
+  })
+
+  it('con correo y región pero sin contraseña: solo se asigna la región', () => {
+    const lista = leerUsuarios('Correo\tRegión\nana@empresa.com\tSur\nsin.region@empresa.com\t\nana@empresa.com\tNorte')
+    expect(lista.conTitulos).toBe(true)
+    expect(lista.usuarios.map((u) => [u.correo, u.region, u.soloRegion, u.error])).toEqual([
+      ['ana@empresa.com', 'Sur', true, null],
+      ['sin.region@empresa.com', '', false, 'Falta la región'],
+      ['ana@empresa.com', 'Norte', true, 'Correo repetido (renglón 1)'],
     ])
   })
 
