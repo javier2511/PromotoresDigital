@@ -114,6 +114,13 @@ el mapa cuentan solo esas. Un cliente está *pendiente* si tiene una asignación
 y *visitado* si su asignación está Completada; las Canceladas no se muestran ni cuentan en el avance. Los clientes se identifican
 por `id_cliente` (el texto que usan asignaciones y visitas), no por el `id` numérico.
 
+**Un cliente asignado a varios promotores:** ejecuta una vez `supabase/12_completar_para_todos.sql`. Desde entonces,
+cuando la asignación de un promotor pasa a `Completada` (desde esta app, desde FlutterFlow o a mano en Supabase), las
+de los demás promotores con ese cliente **en la misma semana** (lunes a domingo, según `fecha_asignada`) también
+pasan a `Completada`, y en su app ese cliente aparece como visitado. No toca las Canceladas ni las de otras
+semanas. Al ejecutarlo corrige también la semana en curso (y te lista las asignaciones que cambió). Solo cambia
+el estatus: la visita, sus respuestas y el Tablero siguen contando solo para el promotor que la hizo.
+
 Al finalizar una visita la app:
 
 1. Inserta una fila en **visitas** con `id_cliente`, `id_asignacion` (la asignación pendiente), `id_promotor`,
@@ -127,7 +134,8 @@ Al finalizar una visita la app:
 2. Inserta en **respuestas** una fila por cada pregunta visible respondida (`id_visita`, `id_pregunta`, el texto
    en `pregunta` y la `respuesta`). Las Sí/No se guardan como `Si`/`No`; las de opción múltiple como texto
    separado por comas.
-3. Pasa la **asignación** a `Completada`. (Sin tabla de asignaciones: marca la columna `visitado` de clientes
+3. Pasa la **asignación** a `Completada` (con `supabase/12_completar_para_todos.sql`, también las de los demás
+   promotores con ese cliente esa semana). (Sin tabla de asignaciones: marca la columna `visitado` de clientes
    o, si no existe, cuenta como visitado a todo cliente con una visita registrada.)
 
 La primera vez que un usuario entra, si no existe en **promotores** la app agrega su fila (id, correo y
