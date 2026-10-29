@@ -207,6 +207,16 @@ protege la tabla promotores: cada usuario ve solo su fila (un admin, todas), nad
 app y al registrarse solo se puede crear la propia fila como promotor. Para hacer admin a alguien:
 `update public.promotores set rol = 'admin' where correo = 'correo@empresa.com';`
 
+**Crear usuarios (varios a la vez):** en **Equipo → Crear usuarios** pega de Excel las columnas **Nombre**,
+**Correo** y **Contraseña** (con o sin la fila de títulos; también se puede subir un CSV). La app revisa cada
+renglón (correo válido y no repetido, contraseña de al menos 6 caracteres), muestra la lista y crea solo los
+correctos. Cada cuenta queda **confirmada**: no se envía ningún correo, así que puede ser un correo inventado.
+Además se agrega en **promotores** como promotor activo; si ya estaba en promotores con ese correo (por ejemplo,
+con asignaciones), la cuenta usa su mismo `id_promotor`. Si un correo ya tenía cuenta no se toca (tampoco su
+contraseña). Opcional: pedirles que elijan su propia contraseña la primera vez que entren. Solo crea promotores
+(los admins se siguen poniendo con el `update` de arriba). Requiere ejecutar una vez `supabase/13_crear_usuarios.sql`
+(y antes el 10).
+
 ### Administradores: pestaña Tablero
 
 Los admins también ven la pestaña **Tablero** ("Desempeño de Visitas Promotores Digitales", con el mismo diseño

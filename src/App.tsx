@@ -24,8 +24,23 @@ import { VisitaPage } from './pages/VisitaPage'
 import { AuthProvider, useAuth } from './providers/AuthProvider'
 import { GeoProvider } from './providers/GeoProvider'
 
-// Solo lo usan los administradores: se descarga al abrirlo.
+// Solo los usan los administradores: se descargan al abrirlos.
 const TableroPage = lazy(() => import('./pages/TableroPage').then((m) => ({ default: m.TableroPage })))
+const CrearUsuariosPage = lazy(() => import('./pages/CrearUsuariosPage').then((m) => ({ default: m.CrearUsuariosPage })))
+
+function Diferida({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="grid min-h-[60dvh] place-items-center">
+          <Spinner className="size-7 text-brand-600" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  )
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,17 +83,20 @@ const router = createBrowserRouter([
       { path: 'perfil', element: <PerfilPage /> },
       { path: 'equipo', element: <EquipoPage /> },
       {
+        path: 'equipo/usuarios',
+        element: (
+          <Diferida>
+            <CrearUsuariosPage />
+          </Diferida>
+        ),
+        handle: hideNav,
+      },
+      {
         path: 'tablero',
         element: (
-          <Suspense
-            fallback={
-              <div className="grid min-h-[60dvh] place-items-center">
-                <Spinner className="size-7 text-brand-600" />
-              </div>
-            }
-          >
+          <Diferida>
             <TableroPage />
-          </Suspense>
+          </Diferida>
         ),
       },
       { path: 'diagnostico', element: <DiagnosticoPage />, handle: hideNav },

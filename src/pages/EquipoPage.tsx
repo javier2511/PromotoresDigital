@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, Clock, MapPin, RefreshCw, Sunrise, TriangleAlert, Users } from 'lucide-react'
+import { CircleCheck, Clock, MapPin, RefreshCw, Sunrise, TriangleAlert, UserPlus, Users } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router'
 import { ErrorState } from '../components/ErrorState'
 import { PageTitle } from '../components/PageHeader'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
+import { ButtonLink } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -162,14 +163,25 @@ export function EquipoPage() {
         title="Equipo"
         subtitle="Jornadas de los promotores"
         actions={
-          <button
-            type="button"
-            onClick={() => query.refetch()}
-            aria-label="Actualizar"
-            className="grid size-10 place-items-center rounded-full text-muted transition hover:bg-card hover:text-fg"
-          >
-            <RefreshCw className={cn('size-5', query.isFetching && 'animate-spin')} />
-          </button>
+          <>
+            <ButtonLink
+              to="/equipo/usuarios"
+              variant="outline"
+              size="sm"
+              icon={<UserPlus className="size-4" />}
+              className="self-center"
+            >
+              Crear usuarios
+            </ButtonLink>
+            <button
+              type="button"
+              onClick={() => query.refetch()}
+              aria-label="Actualizar"
+              className="grid size-10 place-items-center rounded-full text-muted transition hover:bg-card hover:text-fg"
+            >
+              <RefreshCw className={cn('size-5', query.isFetching && 'animate-spin')} />
+            </button>
+          </>
         }
       />
 
