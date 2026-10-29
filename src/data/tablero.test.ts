@@ -12,6 +12,7 @@ import {
   porPromotor,
   tiemposEntreVisitas,
   type ColumnasTablero,
+  type VisitaTablero,
 } from './tablero'
 
 // Las pruebas corren con la zona horaria de México (vitest.config.ts), como los teléfonos de los promotores:
@@ -112,13 +113,42 @@ describe('indicadores', () => {
   const lista = construirVisitas(resultados, visitas, columnas)
   const ind = calcularIndicadores(lista, 100)
 
-  it('visitas, con compra y por figura (visitas / días / promotores)', () => {
+  it('visitas, con compra y por figura (visitas / días / promotores que trabajaron cada día)', () => {
     expect(ind.visitas).toBe(7)
     expect(ind.conCompra).toBe(3)
     expect(ind.dias).toBe(3)
     expect(ind.promotores).toBe(3)
-    expect(ind.diarias).toBeCloseTo(7 / 3 / 3)
-    expect(ind.diariasConCompra).toBeCloseTo(3 / 3 / 3)
+    // El 19 trabajó A; el 20, B; el 21, A y C: 4 días-promotor, 4/3 promotores por día.
+    expect(ind.diasPromotor).toBe(4)
+    expect(ind.promotoresPorDia).toBeCloseTo(4 / 3)
+    expect(ind.diarias).toBeCloseTo(7 / 3 / (4 / 3))
+    expect(ind.diariasConCompra).toBeCloseTo(3 / 4)
+  })
+
+  it('por figura: cada día cuenta solo a los promotores que sí trabajaron ese día', () => {
+    const visita = (key: string, promotor: string, dia: string, conCompra = false): VisitaTablero => ({
+      key,
+      promotor,
+      cliente: null,
+      nombreCliente: null,
+      momento: null,
+      dia,
+      hora: null,
+      conCompra,
+      inicio: null,
+      fin: null,
+      duracion: null,
+      distancia: null,
+    })
+    // A trabaja el lunes y B el martes: 10 visitas en 2 días, pero cada día trabajó una sola figura.
+    const total = calcularIndicadores([
+      ...['1', '2', '3', '4', '5', '6'].map((k) => visita(k, 'A', '2026-10-19', k === '1')),
+      ...['7', '8', '9', '10'].map((k) => visita(k, 'B', '2026-10-20', k === '7')),
+    ])
+    expect(total.promotores).toBe(2)
+    expect(total.promotoresPorDia).toBe(1)
+    expect(total.diarias).toBe(5) // 10 visitas / 2 días / 1 promotor por día (no / 2 promotores)
+    expect(total.diariasConCompra).toBe(1)
   })
 
   it('tiempos promedio', () => {

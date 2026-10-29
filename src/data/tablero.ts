@@ -258,9 +258,13 @@ export interface Indicadores {
   dias: number
   /** Promotores con al menos una visita. */
   promotores: number
-  /** visitas / días / promotores */
+  /** Días trabajados sumando los de cada promotor (cada promotor cuenta solo los días que sí visitó). */
+  diasPromotor: number
+  /** Promotores que visitaron, en promedio, cada día con visitas (diasPromotor / dias). */
+  promotoresPorDia: number | null
+  /** Visitas diarias por figura: visitas / días / promotores que trabajaron esos días (= visitas / diasPromotor). */
   diarias: number | null
-  /** visitas con compra / días / promotores */
+  /** Lo mismo con las visitas con compra. */
   diariasConCompra: number | null
   /** Minutos promedio de visita. */
   tiempoVisita: Promedio
@@ -305,7 +309,9 @@ export function calcularIndicadores(visitas: VisitaTablero[], radio = RADIO_VISI
   const conocidos = new Set(visitas.map((v) => v.promotor).filter(Boolean)).size
   // Si ninguna visita dice quién la hizo, cuenta como un promotor.
   const promotores = conocidos || (visitas.length ? 1 : 0)
-  const porFigura = (n: number) => (dias && promotores ? n / dias / promotores : null)
+  // Cada día cuenta solo a los promotores que sí visitaron ese día (no a todos los del periodo).
+  const diasPromotor = new Set(visitas.filter((v) => v.dia).map((v) => `${v.promotor ?? ''}|${v.dia}`)).size
+  const porFigura = (n: number) => (diasPromotor ? n / diasPromotor : null)
   const duraciones = (lista: VisitaTablero[]) => lista.map((v) => v.duracion).filter((d): d is number => d !== null)
   const distancias = visitas.map((v) => v.distancia).filter((d): d is number => d !== null)
   const columnaNueva = visitas.some((v) => v.minutosNueva !== undefined)
@@ -317,6 +323,8 @@ export function calcularIndicadores(visitas: VisitaTablero[], radio = RADIO_VISI
     conCompra: conCompra.length,
     dias,
     promotores,
+    diasPromotor,
+    promotoresPorDia: dias ? diasPromotor / dias : null,
     diarias: porFigura(visitas.length),
     diariasConCompra: porFigura(conCompra.length),
     tiempoVisita: promedio(duraciones(visitas)),

@@ -23,6 +23,7 @@ import { PageTitle } from '../components/PageHeader'
 import { EncabezadoTablero } from '../components/tablero/Encabezado'
 import { GraficaVisitas } from '../components/tablero/GraficaVisitas'
 import { Alert } from '../components/ui/Alert'
+import { Badge } from '../components/ui/Badge'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -107,6 +108,7 @@ function TarjetaKpi({
   icono: Icono,
   insignia: Insignia,
   titulo,
+  extra,
   valor,
   ayuda,
 }: {
@@ -114,6 +116,8 @@ function TarjetaKpi({
   /** Iconito sobre el principal (p. ej. un reloj sobre el carrito). */
   insignia?: LucideIcon
   titulo: string
+  /** Dato que acompaña al título (p. ej. el porcentaje). */
+  extra?: ReactNode
   valor: string
   /** Cómo se calculó (se ve al pasar el mouse). */
   ayuda?: string
@@ -133,14 +137,19 @@ function TarjetaKpi({
           </span>
         )}
       </span>
-      <p className="text-right text-[12px] leading-tight font-semibold sm:text-[13px]">{titulo}</p>
+      <div className="text-right">
+        <p className="text-[12px] leading-tight font-semibold sm:text-[13px]">{titulo}</p>
+        {extra}
+      </div>
       <p className="col-span-2 self-end text-[26px] leading-none font-bold tracking-tight sm:col-span-1 sm:text-[28px]">{valor}</p>
     </Card>
   )
 }
 
 function Indicadores8({ ind }: { ind: Indicadores }) {
-  const divisores = `${plural(ind.dias, 'día')} ÷ ${plural(ind.promotores, 'promotor', 'promotores')}`
+  // Visitas ÷ días ÷ promotores que sí trabajaron esos días (en promedio por día).
+  const divisores = `${plural(ind.dias, 'día')} ÷ ${formatoDecimal(ind.promotoresPorDia)} promotores que trabajaron por día (promedio)`
+  const pctCompra = porcentaje(ind.conCompra, ind.visitas)
   const promedioDe = (n: number) => `Promedio de ${plural(n, 'visita')}`
   return (
     <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -148,8 +157,13 @@ function Indicadores8({ ind }: { ind: Indicadores }) {
       <TarjetaKpi
         icono={ShoppingCart}
         titulo="Visitas con compra autogestionada"
+        extra={
+          <Badge tone="success" className="mt-1 font-bold tabular-nums">
+            {pctCompra}%
+          </Badge>
+        }
         valor={formatoEntero(ind.conCompra)}
-        ayuda={`${porcentaje(ind.conCompra, ind.visitas)}% de las visitas`}
+        ayuda={`${pctCompra}% de las visitas realizadas (${formatoEntero(ind.conCompra)} de ${formatoEntero(ind.visitas)})`}
       />
       <TarjetaKpi
         icono={CalendarDays}

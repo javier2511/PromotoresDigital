@@ -210,8 +210,8 @@ esa semana):
 | Indicador | Cómo se calcula |
 |---|---|
 | Visitas realizadas | Visitas distintas (`id_visita`); si una visita está cargada varias veces cuenta la fila más reciente. |
-| Visitas con compra autogestionada | Visitas con `digital_post_visita` (o `digital_post_venta`) = true, y su porcentaje. |
-| Visitas diarias por figura | Visitas ÷ días con visitas ÷ promotores que hicieron visitas. |
+| Visitas con compra autogestionada | Visitas con `digital_post_visita` (o `digital_post_venta`) = true; en el encabezado, su % de las visitas realizadas. |
+| Visitas diarias por figura | Visitas ÷ días ÷ promotores que **sí trabajaron** esos días (en promedio por día): cada día cuenta solo a los promotores que visitaron ese día, así que en Total o Mes no baja por quien no trabajó todos los días. Es lo mismo que visitas ÷ días-promotor. |
 | Visitas diarias por figura con compra | Lo mismo, solo con las visitas con compra. |
 | Tiempo x Visita (min) | Promedio de la columna de minutos de visita (p. ej. `tiempo_visita`). |
 | Tiempo x Visita con compra (min) | Lo mismo, solo con las visitas con compra. |
