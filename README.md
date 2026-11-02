@@ -249,8 +249,8 @@ service_role no le afecta. Para deshacerlo:
 Los admins también ven la pestaña **Tablero** ("Desempeño de Visitas Promotores Digitales", con el mismo diseño
 que el reporte de Power BI), con los indicadores de las visitas de `resultados_visitas`. Se filtra por uno o varios
 promotores (solo aparecen los que tienen visitas en el periodo) y por periodo: al abrir se ve el **Total** (todas
-las visitas); también se puede elegir un **mes** o una **semana** (de lunes a domingo, con los días que quieras de
-esa semana):
+las visitas); también se puede elegir un **mes**, una **semana** (de lunes a domingo, con los días que quieras de
+esa semana) o un **rango** de fechas (desde–hasta: la gráfica muestra justo esos días):
 
 | Indicador | Cómo se calcula |
 |---|---|

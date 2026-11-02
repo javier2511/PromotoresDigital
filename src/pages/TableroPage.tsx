@@ -61,6 +61,8 @@ import {
   moverPeriodo,
   partesPeriodo,
   rangoDe,
+  rangoEntre,
+  sumarDias,
   type Periodo,
 } from '../lib/periodos'
 import { esAdmin, veEquipo, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
@@ -75,6 +77,7 @@ const PERIODOS: { value: Periodo; label: string }[] = [
   { value: 'total', label: 'Total' },
   { value: 'mes', label: 'Mes' },
   { value: 'semana', label: 'Semana' },
+  { value: 'rango', label: 'Rango' },
 ]
 
 /** Encabezado de las tablas: una franja gris con el nombre de cada columna, fija al desplazarse. */
@@ -660,7 +663,13 @@ export function TableroPage() {
   const [elegidos, setElegidos] = useState<string[]>([])
   /** Visita elegida en el detalle (sus respuestas se ven en el cuestionario). */
   const [visitaKey, setVisitaKey] = useState<string | null>(null)
-  const rango = useMemo(() => rangoDe(periodo, ancla), [periodo, ancla])
+  /** Rango: de una fecha a otra (las dos incluidas). */
+  const [desdeRango, setDesdeRango] = useState(() => sumarDias(hoy, -13))
+  const [hastaRango, setHastaRango] = useState(hoy)
+  const rango = useMemo(
+    () => (periodo === 'rango' ? rangoEntre(desdeRango, hastaRango) : rangoDe(periodo, ancla)),
+    [periodo, ancla, desdeRango, hastaRango],
+  )
   const permitido = veEquipo(ctx)
   const sqlPermisos = esAdmin(ctx) ? 'supabase/11_admin_tablero.sql' : 'supabase/14_lideres_por_region.sql'
   const tabla = ctx?.tables.resultados.table
@@ -742,8 +751,24 @@ export function TableroPage() {
     setVisitaKey(null)
   }
   const cambiarPeriodo = (p: Periodo) => {
+    // El rango empieza con lo que se estaba viendo: desde la primera visita (total) o el mes o la semana elegidos.
+    if (p === 'rango' && periodo !== 'rango') {
+      setDesdeRango(periodo === 'total' ? (primerDia ?? sumarDias(hoy, -13)) : rango.desde)
+      const fin = sumarDias(rango.hasta, -1)
+      setHastaRango(periodo === 'total' || fin > hoy ? hoy : fin)
+    }
     setPeriodo(p)
     setDias([])
+    setVisitaKey(null)
+  }
+  const cambiarDesde = (fecha: string) => {
+    setDesdeRango(fecha)
+    if (fecha > hastaRango) setHastaRango(fecha)
+    setVisitaKey(null)
+  }
+  const cambiarHasta = (fecha: string) => {
+    setHastaRango(fecha)
+    if (fecha < desdeRango) setDesdeRango(fecha)
     setVisitaKey(null)
   }
   const alternar = <T,>(lista: T[], x: T) => (lista.includes(x) ? lista.filter((y) => y !== x) : [...lista, x])
@@ -813,8 +838,33 @@ export function TableroPage() {
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SegmentedControl label="Periodo" value={periodo} onChange={cambiarPeriodo} options={PERIODOS} className="sm:w-72" />
-          {periodo === 'total' ? (
+          <SegmentedControl label="Periodo" value={periodo} onChange={cambiarPeriodo} options={PERIODOS} className="sm:w-96" />
+          {periodo === 'rango' ? (
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              {(
+                [
+                  ['Desde', desdeRango, cambiarDesde, undefined, hoy],
+                  ['Hasta', hastaRango, cambiarHasta, desdeRango, hoy],
+                ] as const
+              ).map(([etiqueta, valor, cambiar, min, max]) => (
+                <label
+                  key={etiqueta}
+                  className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-card px-3 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 sm:max-w-52"
+                >
+                  <span className="shrink-0 text-xs font-semibold text-muted">{etiqueta}</span>
+                  <input
+                    type="date"
+                    value={valor}
+                    min={min}
+                    max={max}
+                    onChange={(e) => e.target.value && cambiar(e.target.value)}
+                    aria-label={etiqueta}
+                    className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-fg outline-none"
+                  />
+                </label>
+              ))}
+            </div>
+          ) : periodo === 'total' ? (
             <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-card px-3 sm:max-w-72">
               <CalendarDays className="size-4 shrink-0 text-muted" />
               <span className="flex min-w-0 flex-col items-start leading-tight">

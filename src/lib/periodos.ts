@@ -1,5 +1,5 @@
-/** Periodos del tablero: todo, un día, una semana (lunes a domingo) o un mes. Fechas locales "YYYY-MM-DD". */
-export type Periodo = 'total' | 'dia' | 'semana' | 'mes'
+/** Periodos del tablero: todo, un día, una semana (lunes a domingo), un mes o de una fecha a otra. Fechas locales "YYYY-MM-DD". */
+export type Periodo = 'total' | 'dia' | 'semana' | 'mes' | 'rango'
 
 export interface Rango {
   periodo: Periodo
@@ -34,10 +34,10 @@ export function sumarDias(fecha: string, dias: number): string {
 /** Límites de "total": abarcan cualquier fecha. */
 export const SIN_LIMITE = { desde: '0001-01-01', hasta: '9999-12-31' }
 
-/** Todo, o el día, la semana (de lunes a domingo) o el mes que contiene a `ancla`. */
+/** Todo, o el día, la semana (de lunes a domingo) o el mes que contiene a `ancla` (un rango, ver rangoEntre). */
 export function rangoDe(periodo: Periodo, ancla: string): Rango {
   if (periodo === 'total') return { periodo, ...SIN_LIMITE }
-  if (periodo === 'dia') return { periodo, desde: ancla, hasta: sumarDias(ancla, 1) }
+  if (periodo === 'dia' || periodo === 'rango') return { periodo, desde: ancla, hasta: sumarDias(ancla, 1) }
   const d = deIso(ancla)
   if (periodo === 'semana') {
     const lunes = sumarDias(ancla, -((d.getDay() + 6) % 7))
@@ -50,9 +50,15 @@ export function rangoDe(periodo: Periodo, ancla: string): Rango {
   }
 }
 
+/** De una fecha a otra, las dos incluidas (si vienen al revés, se acomodan). */
+export function rangoEntre(desde: string, hasta: string): Rango {
+  const [a, b] = desde <= hasta ? [desde, hasta] : [hasta, desde]
+  return { periodo: 'rango', desde: a, hasta: sumarDias(b, 1) }
+}
+
 /** Mueve la fecha de referencia un periodo hacia atrás (-1) o adelante (+1). */
 export function moverPeriodo(periodo: Periodo, ancla: string, pasos: number): string {
-  if (periodo === 'total') return ancla
+  if (periodo === 'total' || periodo === 'rango') return ancla
   if (periodo === 'dia') return sumarDias(ancla, pasos)
   if (periodo === 'semana') return sumarDias(ancla, 7 * pasos)
   // Mismo día del mes, sin pasarse del último (31 de marzo → 30 de abril).
@@ -118,10 +124,16 @@ export function partesPeriodo(r: Rango, hoy: string): { titulo: string; detalle:
     const detalle = r.desde === hoy ? 'Hoy' : r.desde === sumarDias(hoy, -1) ? 'Ayer' : null
     return { titulo: `${DIAS_CORTOS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}${anio}`, detalle }
   }
-  if (r.periodo === 'semana') {
+  if (r.periodo === 'semana' || r.periodo === 'rango') {
     const fin = deIso(sumarDias(r.hasta, -1))
-    const inicio = d.getMonth() === fin.getMonth() ? `${d.getDate()}` : `${d.getDate()} ${MESES[d.getMonth()]}`
-    return { titulo: `${inicio} – ${fin.getDate()} ${MESES[fin.getMonth()]}${anio}`, detalle: `Semana ${semanaIso(r.desde)}` }
+    const mismoMes = d.getMonth() === fin.getMonth() && d.getFullYear() === fin.getFullYear()
+    const inicio = mismoMes ? `${d.getDate()}` : `${d.getDate()} ${MESES[d.getMonth()]}`
+    const titulo =
+      r.desde === sumarDias(r.hasta, -1)
+        ? `${d.getDate()} ${MESES[d.getMonth()]}${anio}`
+        : `${inicio} – ${fin.getDate()} ${MESES[fin.getMonth()]}${anio}`
+    const dias = diasDelRango(r).length
+    return { titulo, detalle: r.periodo === 'semana' ? `Semana ${semanaIso(r.desde)}` : `${dias} ${dias === 1 ? 'día' : 'días'}` }
   }
   const mes = MESES_LARGOS[d.getMonth()]
   return { titulo: `${mes.charAt(0).toUpperCase()}${mes.slice(1)} ${d.getFullYear()}`, detalle: null }

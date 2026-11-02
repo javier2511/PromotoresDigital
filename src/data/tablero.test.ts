@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Row } from '../lib/supabase'
-import { rangoDe } from '../lib/periodos'
+import { rangoDe, rangoEntre } from '../lib/periodos'
 import {
   calcularIndicadores,
   columnasResultados,
@@ -338,5 +338,27 @@ describe('total', () => {
 
   it('sin visitas no hay barras', () => {
     expect(porBarra([], rangoDe('total', '2026-10-16'))).toEqual([])
+  })
+})
+
+describe('rango de fechas', () => {
+  const v = (key: string, dia: string): VisitaTablero =>
+    ({ key, promotor: 'A', cliente: null, nombreCliente: null, momento: null, dia, hora: 10, conCompra: false, inicio: null, fin: null, duracion: null, distancia: null })
+
+  it('una barra por cada día elegido, aunque no tenga visitas (los que no llegan, vacíos)', () => {
+    const barras = porBarra([v('1', '2026-10-15')], rangoEntre('2026-10-14', '2026-10-17'), { ahora: new Date(2026, 9, 16, 12) })
+    expect(barras.map((b) => [b.clave, b.tipo, b.visitas, b.futuro])).toEqual([
+      ['2026-10-14', 'dia', 0, false],
+      ['2026-10-15', 'dia', 1, false],
+      ['2026-10-16', 'dia', 0, false],
+      ['2026-10-17', 'dia', 0, true],
+    ])
+  })
+
+  it('más de 35 días: por semana, empezando en la semana del primer día', () => {
+    const barras = porBarra([v('1', '2026-08-20'), v('2', '2026-10-01')], rangoEntre('2026-08-19', '2026-10-02'), { ahora: new Date(2026, 9, 16, 12) })
+    expect(barras[0]).toMatchObject({ clave: '2026-08-17', tipo: 'semana', visitas: 1 })
+    expect(barras.at(-1)).toMatchObject({ clave: '2026-09-28', tipo: 'semana', visitas: 1 })
+    expect(barras).toHaveLength(7)
   })
 })

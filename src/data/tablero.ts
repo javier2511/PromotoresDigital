@@ -388,17 +388,26 @@ export function porBarra(
     conCompra: lista.filter((v) => v.conCompra).length,
     futuro,
   })
-  if (rango.periodo === 'total') {
-    // Del primer día con visitas hasta hoy (o hasta la última visita, si es después).
-    const dias = visitas.map((v) => v.dia).filter((d): d is string => d !== null).sort()
-    if (dias.length === 0) return []
-    const fin = dias[dias.length - 1] > hoy ? dias[dias.length - 1] : hoy
-    const todos = diasDelRango({ desde: dias[0], hasta: sumarDias(fin, 1) })
-    if (todos.length <= MAX_DIAS_POR_DIA) return todos.map((dia) => contar(dia, 'dia', visitas.filter((v) => v.dia === dia)))
+  if (rango.periodo === 'total' || rango.periodo === 'rango') {
+    // Total: del primer día con visitas hasta hoy (o hasta la última visita, si es después).
+    // Rango: justo las fechas elegidas (los días que no llegan quedan vacíos).
+    let inicio = rango.desde
+    let fin = sumarDias(rango.hasta, -1)
+    if (rango.periodo === 'total') {
+      const dias = visitas.map((v) => v.dia).filter((d): d is string => d !== null).sort()
+      if (dias.length === 0) return []
+      inicio = dias[0]
+      fin = dias[dias.length - 1] > hoy ? dias[dias.length - 1] : hoy
+    }
+    const futuro = (dia: string) => rango.periodo === 'rango' && dia > hoy
+    const todos = diasDelRango({ desde: inicio, hasta: sumarDias(fin, 1) })
+    if (todos.length <= MAX_DIAS_POR_DIA) {
+      return todos.map((dia) => contar(dia, 'dia', visitas.filter((v) => v.dia === dia), futuro(dia)))
+    }
     const semanas: Barra[] = []
-    for (let lunes = rangoDe('semana', dias[0]).desde; lunes <= fin; lunes = sumarDias(lunes, 7)) {
+    for (let lunes = rangoDe('semana', inicio).desde; lunes <= fin; lunes = sumarDias(lunes, 7)) {
       const hasta = sumarDias(lunes, 7)
-      semanas.push(contar(lunes, 'semana', visitas.filter((v) => v.dia !== null && v.dia >= lunes && v.dia < hasta)))
+      semanas.push(contar(lunes, 'semana', visitas.filter((v) => v.dia !== null && v.dia >= lunes && v.dia < hasta), futuro(lunes)))
     }
     return semanas
   }

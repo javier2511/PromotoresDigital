@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diasDelRango, etiquetaPeriodo, fechaLarga, moverPeriodo, partesPeriodo, rangoDe, semanaIso } from './periodos'
+import { diasDelRango, etiquetaPeriodo, fechaLarga, moverPeriodo, partesPeriodo, rangoDe, rangoEntre, semanaIso } from './periodos'
 
 describe('rangoDe', () => {
   it('semana de lunes a domingo (el domingo pertenece a la semana que empezó el lunes)', () => {
@@ -22,6 +22,21 @@ describe('total', () => {
     expect('2020-01-01' >= r.desde && '2030-12-31' < r.hasta).toBe(true)
     expect(moverPeriodo('total', '2026-10-26', 1)).toBe('2026-10-26')
     expect(etiquetaPeriodo(r, '2026-10-26')).toBe('Todas las visitas')
+  })
+})
+
+describe('rango de fechas', () => {
+  it('de una fecha a otra, las dos incluidas (al revés se acomodan)', () => {
+    expect(rangoEntre('2026-10-14', '2026-10-28')).toEqual({ periodo: 'rango', desde: '2026-10-14', hasta: '2026-10-29' })
+    expect(rangoEntre('2026-10-28', '2026-10-14')).toEqual({ periodo: 'rango', desde: '2026-10-14', hasta: '2026-10-29' })
+    expect(moverPeriodo('rango', '2026-10-20', 1)).toBe('2026-10-20')
+  })
+
+  it('texto del rango', () => {
+    const hoy = '2026-10-30'
+    expect(partesPeriodo(rangoEntre('2026-10-14', '2026-10-28'), hoy)).toEqual({ titulo: '14 – 28 oct', detalle: '15 días' })
+    expect(partesPeriodo(rangoEntre('2026-09-28', '2026-10-03'), hoy)).toEqual({ titulo: '28 sep – 3 oct', detalle: '6 días' })
+    expect(etiquetaPeriodo(rangoEntre('2026-10-20', '2026-10-20'), hoy)).toBe('1 día · 20 oct')
   })
 })
 

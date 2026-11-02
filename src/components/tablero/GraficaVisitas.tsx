@@ -28,8 +28,9 @@ export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango:
   const tipo = barras[0]?.tipo ?? (rango.periodo === 'dia' ? 'hora' : 'dia')
   const porHora = tipo === 'hora'
   const porSemana = tipo === 'semana'
-  // En "total" puede haber muchas barras: solo algunas llevan su fecha abajo.
-  const cada = rango.periodo === 'total' ? Math.max(1, Math.ceil(barras.length / 8)) : 1
+  // En "total" o en un rango puede haber muchas barras: solo algunas llevan su fecha abajo.
+  const variosMeses = rango.periodo === 'total' || rango.periodo === 'rango'
+  const cada = variosMeses ? Math.max(1, Math.ceil(barras.length / 8)) : 1
   const { tope, marcas } = escalaEje(Math.max(0, ...barras.map((b) => b.visitas)))
   const columnas = { gridTemplateColumns: `repeat(${barras.length}, minmax(0, 1fr))` }
   const total = barras.reduce((s, b) => s + b.visitas, 0)
@@ -44,7 +45,7 @@ export function GraficaVisitas({ barras, rango, hoy }: { barras: Barra[]; rango:
         : capitalizar(fechaLarga(b.clave, hoy))
   const etiqueta = (b: Barra, i: number) => {
     if (porHora) return Number(b.clave) % 2 === 0 ? b.clave : ''
-    if (rango.periodo === 'total') return i % cada === 0 ? diaMes(b.clave) : ''
+    if (variosMeses) return i % cada === 0 ? diaMes(b.clave) : ''
     const d = deIso(b.clave)
     if (rango.periodo === 'semana') return `${DIAS_CORTOS[d.getDay()]} ${d.getDate()}`
     return d.getDate() === 1 || d.getDate() % 5 === 0 ? String(d.getDate()) : ''
