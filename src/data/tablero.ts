@@ -44,6 +44,8 @@ export interface VisitaTablero {
 export interface PromotorTablero {
   id: string
   nombre: string
+  /** Región (supabase/14_lideres_por_region.sql): el admin puede filtrar el tablero por ella. */
+  region?: string | null
 }
 
 /** Columna de resultados_visitas de donde sale cada dato (null: no la tiene). */

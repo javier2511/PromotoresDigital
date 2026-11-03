@@ -233,7 +233,9 @@ cuenta) y da los permisos de lectura del líder.
 | Equipo (jornadas) y Crear usuarios | Sí | No | No |
 
 Un líder ve a los promotores cuya `region` es igual a la suya (sin importar mayúsculas ni espacios); sin región
-no ve a nadie. Para hacer líder a alguien:
+no ve a nadie. El admin ve todo y en el Tablero tiene un filtro **Región** (una o varias, o "Sin región") que
+limita indicadores, gráfica y tablas; el filtro de promotor muestra entonces solo los de esas regiones. Para hacer
+líder a alguien:
 `update public.promotores set rol = 'lider', region = 'Norte' where correo = 'correo@empresa.com';`
 
 **Importante:** `visitas` y `resultados_visitas` no tienen activada la seguridad por filas (RLS). La app solo le

@@ -50,7 +50,7 @@ import {
 } from '../data/tablero'
 import { aCsv, descargarArchivo } from '../lib/csv'
 import { friendlyError } from '../lib/errors'
-import { formatoDecimal, formatoEntero, formatoFechaHora, formatoMetros, formatoMinutos, porcentaje } from '../lib/formato'
+import { capitalizar, formatoDecimal, formatoEntero, formatoFechaHora, formatoMetros, formatoMinutos, porcentaje } from '../lib/formato'
 import {
   deIso,
   DIAS_CORTOS,
@@ -67,7 +67,7 @@ import {
 } from '../lib/periodos'
 import { esAdmin, veEquipo, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import type { Row } from '../lib/supabase'
-import { plural } from '../lib/text'
+import { normalize, plural } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
 
 /** Valor del filtro para las visitas sin promotor. */
@@ -661,6 +661,8 @@ export function TableroPage() {
   const [dias, setDias] = useState<string[]>([])
   /** Promotores elegidos (vacío: todos). */
   const [elegidos, setElegidos] = useState<string[]>([])
+  /** Regiones elegidas, solo el admin (sin mayúsculas ni acentos; '' = sin región; vacío: todas). */
+  const [regiones, setRegiones] = useState<string[]>([])
   /** Visita elegida en el detalle (sus respuestas se ven en el cuestionario). */
   const [visitaKey, setVisitaKey] = useState<string | null>(null)
   /** Rango: de una fecha a otra (las dos incluidas). */
@@ -671,7 +673,8 @@ export function TableroPage() {
     [periodo, ancla, desdeRango, hastaRango],
   )
   const permitido = veEquipo(ctx)
-  const sqlPermisos = esAdmin(ctx) ? 'supabase/11_admin_tablero.sql' : 'supabase/14_lideres_por_region.sql'
+  const admin = esAdmin(ctx)
+  const sqlPermisos = admin ? 'supabase/11_admin_tablero.sql' : 'supabase/14_lideres_por_region.sql'
   const tabla = ctx?.tables.resultados.table
 
   // A quiénes ve: un admin, a todos; un líder, a los de su región.
@@ -696,9 +699,19 @@ export function TableroPage() {
     () => datos?.visitas.filter((v) => v.dia !== null && v.dia >= datos.rango.desde && v.dia < datos.rango.hasta) ?? [],
     [datos],
   )
+  // Región de cada visita: la de su promotor ('' si no tiene).
+  const regionPorPromotor = useMemo(
+    () => new Map((datos?.promotores ?? []).map((p) => [p.id, normalize(p.region)])),
+    [datos],
+  )
+  const delRegion = useMemo(
+    () =>
+      regiones.length ? delPeriodo.filter((v) => regiones.includes(regionPorPromotor.get(v.promotor ?? '') ?? '')) : delPeriodo,
+    [delPeriodo, regiones, regionPorPromotor],
+  )
   const enDias = useMemo(
-    () => (periodo === 'semana' && dias.length ? delPeriodo.filter((v) => dias.includes(v.dia!)) : delPeriodo),
-    [delPeriodo, periodo, dias],
+    () => (periodo === 'semana' && dias.length ? delRegion.filter((v) => dias.includes(v.dia!)) : delRegion),
+    [delRegion, periodo, dias],
   )
   const filas = useMemo(() => porPromotor(enDias, datos?.promotores ?? []), [enDias, datos])
   const visibles = useMemo(
@@ -734,13 +747,28 @@ export function TableroPage() {
     [datos],
   )
 
-  // Opciones del filtro de promotor: solo los que tienen visitas en el periodo (y los elegidos, para poder quitarlos).
+  // Opciones del filtro de promotor: solo los que tienen visitas en el periodo y la región (y los elegidos, para quitarlos).
   const opciones = useMemo(() => {
-    const ids = new Set([...delPeriodo.map((v) => v.promotor ?? SIN_PROMOTOR), ...elegidos])
+    const ids = new Set([...delRegion.map((v) => v.promotor ?? SIN_PROMOTOR), ...elegidos])
     return [...ids]
       .map((id) => ({ id, nombre: id === SIN_PROMOTOR ? 'Sin promotor' : (nombres.get(id) ?? id) }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [delPeriodo, elegidos, nombres])
+  }, [delRegion, elegidos, nombres])
+  // Filtro de región (solo el admin): las de los promotores con visitas en el periodo (y las elegidas). Si nadie
+  // tiene región, no aparece.
+  const opcionesRegion = useMemo(() => {
+    if (!admin) return []
+    const nombre = new Map<string, string>()
+    for (const p of datos?.promotores ?? []) {
+      const clave = normalize(p.region)
+      if (clave && !nombre.has(clave)) nombre.set(clave, capitalizar(p.region!.trim()))
+    }
+    const claves = [...new Set([...delPeriodo.map((v) => regionPorPromotor.get(v.promotor ?? '') ?? ''), ...regiones])]
+    if (!claves.some(Boolean)) return []
+    return claves
+      .map((clave) => ({ clave, nombre: clave ? (nombre.get(clave) ?? clave) : 'Sin región' }))
+      .sort((a, b) => Number(!a.clave) - Number(!b.clave) || a.nombre.localeCompare(b.nombre, 'es'))
+  }, [admin, datos, delPeriodo, regionPorPromotor, regiones])
 
   if (ctxPending) return null
   if (!permitido) return <Navigate to="/" replace />
@@ -772,6 +800,12 @@ export function TableroPage() {
     setVisitaKey(null)
   }
   const alternar = <T,>(lista: T[], x: T) => (lista.includes(x) ? lista.filter((y) => y !== x) : [...lista, x])
+  // Al cambiar de región se quitan los promotores elegidos (podrían ser de otra).
+  const elegirRegiones = (lista: string[]) => {
+    setRegiones(lista)
+    setElegidos([])
+    setVisitaKey(null)
+  }
   const elegirVisita = (key: string | null) => {
     setVisitaKey(key)
     // El cuestionario está abajo del detalle: si no se ve, se baja hasta él.
@@ -824,6 +858,25 @@ export function TableroPage() {
 
       {/* Filtros: arriba de todo lo que cambian (como los del reporte: promotor, semana y días). */}
       <div className="mt-5 space-y-3">
+        {opcionesRegion.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Región</p>
+            <div className={filaScroll} role="group" aria-label="Región">
+              <Chip activo={regiones.length === 0} onClick={() => elegirRegiones([])}>
+                Todas
+              </Chip>
+              {opcionesRegion.map((o) => (
+                <Chip
+                  key={o.clave || '__sin__'}
+                  activo={regiones.includes(o.clave)}
+                  onClick={() => elegirRegiones(alternar(regiones, o.clave))}
+                >
+                  {o.nombre}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Promotor</p>
           <div className={filaScroll} role="group" aria-label="Promotor">
