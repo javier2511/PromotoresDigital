@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Award, CalendarClock, RefreshCw, ShoppingCart, Trophy, Users } from 'lucide-react'
+import { Award, CalendarClock, MapPin, RefreshCw, ShoppingCart, Trophy, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router'
 import { ErrorState } from '../components/ErrorState'
@@ -13,13 +13,13 @@ import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
-import { fetchAlcance, idsDe, opcionesRegion } from '../data/alcance'
+import { FaltaSqlRegiones, fetchAlcance, idsDe, opcionesRegion, SinRegion } from '../data/alcance'
 import { fetchConcurso, rankingConcurso, type VisitaConcurso } from '../data/concurso'
 import { useSchema } from '../data/hooks'
 import { aCsv, descargarArchivo } from '../lib/csv'
 import { capitalizar, formatoEntero, formatoFechaHora, porcentaje } from '../lib/formato'
 import { hoyLocal, sumarDias } from '../lib/periodos'
-import { esAdmin } from '../lib/schema-resolver'
+import { esAdmin, veEquipo } from '../lib/schema-resolver'
 import { normalize, plural } from '../lib/text'
 import { useUser } from '../providers/AuthProvider'
 
@@ -29,11 +29,15 @@ const MAX_FILAS_COMPRAS = 500
 /** Color del lugar en el ranking: oro, plata y bronce. */
 const MEDALLA = ['bg-amber-400 text-amber-950', 'bg-slate-300 text-slate-900', 'bg-orange-300 text-orange-950']
 
-/** Solo administradores: visitas con compra autogestionada contadas por su fecha de actualización (para el concurso). */
+/**
+ * Administradores (todos) y líderes (su región): las visitas con compra autogestionada contadas por su fecha de
+ * actualización (para el concurso), junto a todas las visitas realizadas en el periodo (por su fecha de visita).
+ */
 export function ConcursoPage() {
   const user = useUser()
   const { data: ctx, isPending: ctxPending } = useSchema()
   const hoy = hoyLocal()
+  const permitido = veEquipo(ctx)
   const admin = esAdmin(ctx)
   /** Regiones elegidas (sin mayúsculas ni acentos; '' = sin región; vacío: todas). */
   const [regiones, setRegiones] = useState<string[]>([])
@@ -43,54 +47,61 @@ export function ConcursoPage() {
   const alcanceQuery = useQuery({
     queryKey: ['alcance', user.id, ctx?.perfil?.rol, ctx?.perfil?.region],
     queryFn: () => fetchAlcance(ctx!),
-    enabled: Boolean(ctx && admin),
+    enabled: Boolean(ctx && permitido),
     staleTime: 5 * 60_000,
   })
   const alcance = alcanceQuery.data
   const query = useQuery({
     queryKey: ['concurso', user.id, alcance ? idsDe(alcance) : null],
     queryFn: () => fetchConcurso(ctx!, alcance!),
-    enabled: Boolean(ctx && admin && alcance && ctx.tables.resultados.table),
+    enabled: Boolean(ctx && permitido && alcance && ctx.tables.resultados.table),
     staleTime: 2 * 60_000,
   })
   const datos = query.data
 
-  const primerDia = useMemo(
-    () => datos?.visitas.reduce<string | null>((min, v) => (v.dia && (!min || v.dia < min) ? v.dia : min), null) ?? null,
-    [datos],
-  )
-  // En Total cuentan todas (también las que no tienen fecha de actualización); si no, las actualizadas en el periodo.
-  const delPeriodo = useMemo(
-    () =>
-      datos?.visitas.filter((v) => rango.periodo === 'total' || (v.dia !== null && v.dia >= rango.desde && v.dia < rango.hasta)) ??
-      [],
-    [datos, rango],
-  )
+  const primerDia = useMemo(() => {
+    const dias = (datos?.visitas ?? []).flatMap((v) => [v.diaVisita, v.diaActualizacion]).filter((d): d is string => d !== null)
+    return dias.length ? dias.reduce((min, d) => (d < min ? d : min)) : null
+  }, [datos])
+  // En Total cuenta todo (también lo que no tiene fecha); si no, lo que cae en el periodo.
+  const delPeriodo = useMemo(() => {
+    const enPeriodo = (dia: string | null) => rango.periodo === 'total' || (dia !== null && dia >= rango.desde && dia < rango.hasta)
+    const lista = datos?.visitas ?? []
+    return {
+      // Todas las visitas realizadas en el periodo (por su fecha de visita), con o sin compra.
+      visitas: lista.filter((v) => enPeriodo(v.diaVisita)),
+      // Las compras por la fecha en que se actualizaron (aunque la visita sea de antes).
+      compras: lista.filter((v) => v.conCompra && enPeriodo(v.diaActualizacion)),
+    }
+  }, [datos, rango])
   const regionPorPromotor = useMemo(() => new Map((datos?.promotores ?? []).map((p) => [p.id, normalize(p.region)])), [datos])
+  const regionDe = (v: VisitaConcurso) => regionPorPromotor.get(v.promotor ?? '') ?? ''
+  // Filtro de región: solo el admin (el líder ya solo ve su región).
   const regionesOpciones = useMemo(
     () =>
-      opcionesRegion(datos?.promotores ?? [], [...delPeriodo.map((v) => regionPorPromotor.get(v.promotor ?? '') ?? ''), ...regiones]),
-    [datos, delPeriodo, regionPorPromotor, regiones],
+      admin
+        ? opcionesRegion(datos?.promotores ?? [], [
+            ...[...delPeriodo.visitas, ...delPeriodo.compras].map((v) => regionPorPromotor.get(v.promotor ?? '') ?? ''),
+            ...regiones,
+          ])
+        : [],
+    [admin, datos, delPeriodo, regionPorPromotor, regiones],
   )
-  const visibles = useMemo(
-    () =>
-      regiones.length ? delPeriodo.filter((v) => regiones.includes(regionPorPromotor.get(v.promotor ?? '') ?? '')) : delPeriodo,
-    [delPeriodo, regiones, regionPorPromotor],
+  const visitas = regiones.length ? delPeriodo.visitas.filter((v) => regiones.includes(regionDe(v))) : delPeriodo.visitas
+  const compras = (regiones.length ? delPeriodo.compras.filter((v) => regiones.includes(regionDe(v))) : delPeriodo.compras).sort(
+    (a, b) => (b.actualizado ?? -Infinity) - (a.actualizado ?? -Infinity),
   )
-  const ranking = useMemo(() => rankingConcurso(visibles, datos?.promotores ?? []), [visibles, datos])
-  const compras = useMemo(
-    () => visibles.filter((v) => v.conCompra).sort((a, b) => (b.actualizado ?? -Infinity) - (a.actualizado ?? -Infinity)),
-    [visibles],
-  )
+  const ranking = rankingConcurso(visitas, compras, datos?.promotores ?? [])
   const nombres = useMemo(() => new Map((datos?.promotores ?? []).map((p) => [p.id, p.nombre])), [datos])
 
   if (ctxPending) return null
-  if (!admin) return <Navigate to="/" replace />
+  if (!permitido) return <Navigate to="/" replace />
 
   const conCompra = ranking.filter((f) => f.conCompra > 0)
   const primeros = conCompra.filter((f) => f.lugar === 1)
-  const sinFecha = datos?.visitas.filter((v) => v.dia === null).length ?? 0
+  const sinFecha = datos?.visitas.filter((v) => v.conCompra && v.diaActualizacion === null).length ?? 0
   const error = alcanceQuery.error ?? query.error
+  const region = alcance?.tipo === 'region' ? alcance.region : null
 
   const descargarRanking = () => {
     const filas = ranking.map((f) => ({
@@ -109,7 +120,7 @@ export function ConcursoPage() {
     <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
       <PageTitle
         title="Resultados concurso"
-        subtitle="Compras autogestionadas por fecha de actualización"
+        subtitle={`Compras autogestionadas por fecha de actualización${region ? ` · Región ${region}` : ''}`}
         actions={
           <button
             type="button"
@@ -127,10 +138,14 @@ export function ConcursoPage() {
 
       <div className="mt-5 space-y-3">
         <FiltroRegion opciones={regionesOpciones} elegidas={regiones} onElegir={setRegiones} />
-        <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todas las actualizaciones" />
+        <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todas las visitas y compras" />
       </div>
 
-      {error ? (
+      {error instanceof FaltaSqlRegiones || error instanceof SinRegion ? (
+        <EmptyState icon={MapPin} title={error instanceof SinRegion ? 'Sin región asignada' : 'Falta un paso en Supabase'}>
+          {error.message}
+        </EmptyState>
+      ) : error ? (
         <div className="mt-5">
           <ErrorState error={error} onRetry={() => (alcanceQuery.isError ? alcanceQuery.refetch() : query.refetch())} />
         </div>
@@ -151,10 +166,10 @@ export function ConcursoPage() {
       ) : (
         <div className="mt-5">
           <EncabezadoTablero className="rounded-xl">Concurso de compras</EncabezadoTablero>
-          {visibles.length === 0 ? (
+          {visitas.length === 0 && compras.length === 0 ? (
             <Card className="mt-3">
-              <EmptyState icon={Trophy} title="Sin actualizaciones en este periodo">
-                Prueba con otro periodo o con otra región.
+              <EmptyState icon={Trophy} title="Sin visitas ni compras en este periodo">
+                Prueba con otro periodo{admin ? ' o con otra región' : ''}.
               </EmptyState>
             </Card>
           ) : (
@@ -165,23 +180,23 @@ export function ConcursoPage() {
                   titulo="Visitas con compra autogestionada"
                   extra={
                     <Badge tone="success" className="mt-1 font-bold tabular-nums">
-                      {porcentaje(compras.length, visibles.length)}%
+                      {porcentaje(compras.length, visitas.length)}%
                     </Badge>
                   }
                   valor={formatoEntero(compras.length)}
-                  ayuda={`${porcentaje(compras.length, visibles.length)}% de las ${formatoEntero(visibles.length)} visitas actualizadas en el periodo`}
+                  ayuda={`Compras actualizadas en el periodo (fecha_actualizacion): ${porcentaje(compras.length, visitas.length)}% de las ${formatoEntero(visitas.length)} visitas realizadas`}
                 />
                 <TarjetaKpi
                   icono={Users}
-                  titulo="Visitas actualizadas"
-                  valor={formatoEntero(visibles.length)}
-                  ayuda="Visitas cuyo resultado se actualizó en el periodo (fecha_actualizacion)"
+                  titulo="Visitas realizadas"
+                  valor={formatoEntero(visitas.length)}
+                  ayuda="Todas las visitas del periodo por su fecha de visita, con o sin compra"
                 />
                 <TarjetaKpi
                   icono={Award}
                   titulo="Promotores con compra"
                   valor={formatoEntero(conCompra.length)}
-                  ayuda={`De ${plural(ranking.length, 'promotor', 'promotores')} con visitas actualizadas`}
+                  ayuda={`De ${plural(ranking.length, 'promotor', 'promotores')} con visitas o compras en el periodo`}
                 />
                 <TarjetaKpi
                   icono={Trophy}
@@ -200,7 +215,7 @@ export function ConcursoPage() {
               </div>
               {rango.periodo === 'total' && sinFecha > 0 && (
                 <p className="mt-2 px-1 text-xs text-muted">
-                  {plural(sinFecha, 'visita no tiene', 'visitas no tienen')} fecha de actualización: solo cuentan en Total.
+                  {plural(sinFecha, 'compra no tiene', 'compras no tienen')} fecha de actualización: solo cuentan en Total.
                 </p>
               )}
 

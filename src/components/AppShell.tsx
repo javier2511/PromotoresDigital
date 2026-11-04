@@ -25,7 +25,7 @@ const NAV: NavItem[] = [
   { to: '/perfil', label: 'Perfil', icon: CircleUserRound },
 ]
 
-/** Administradores (rol admin): indicadores de todas las visitas, el concurso y las jornadas. Líderes: solo el Tablero. */
+/** Administradores (rol admin): indicadores de todas las visitas, el concurso y las jornadas. Líderes: Tablero y Concurso. */
 const TABLERO: NavItem = { to: '/tablero', label: 'Tablero', icon: LayoutDashboard }
 const CONCURSO: NavItem = { to: '/concurso', label: 'Concurso', icon: Trophy }
 const EQUIPO: NavItem = { to: '/equipo', label: 'Equipo', icon: Users }
@@ -60,7 +60,7 @@ export function AppShell() {
   const { user } = useAuth()
   const { data: ctx } = useSchema()
   useAsegurarPerfil()
-  const extra = esAdmin(ctx) ? [TABLERO, CONCURSO, EQUIPO] : esLider(ctx) ? [TABLERO] : []
+  const extra = esAdmin(ctx) ? [TABLERO, CONCURSO, EQUIPO] : esLider(ctx) ? [TABLERO, CONCURSO] : []
   const nav = [...NAV.slice(0, 3), ...extra, NAV[3]]
   // Con 7 pestañas (admin) la barra del teléfono se compacta un poco para que quepan.
   const compacta = nav.length >= 7

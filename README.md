@@ -282,14 +282,16 @@ filtradas (al tocar una visita del detalle quedan solo sus respuestas). Para que
 de todos los promotores ejecuta `supabase/11_admin_tablero.sql` (requiere el 10). Los líderes ven este mismo
 tablero solo con los promotores de su región (ver *Líderes por región*).
 
-### Administradores: pestaña Concurso (Resultados concurso)
+### Pestaña Concurso (Resultados concurso)
 
-Por ahora solo para admins. Cuenta las **visitas con compra autogestionada** de `resultados_visitas` por su
-**`fecha_actualizacion`** (no por `fecha_visita`, como el Tablero): cada visita cuenta una vez, con su fila más
-reciente, en el día en que se actualizó. Se filtra igual que el Tablero (Total, Mes, Semana o Rango, y por región)
-y muestra: visitas con compra y su porcentaje, visitas actualizadas, promotores con compra, el primer lugar, el
-**ranking por promotor** (los empates comparten lugar; se puede descargar en CSV) y el detalle de las visitas con
-compra. En Total también cuentan las visitas sin fecha de actualización.
+La ven los admins (todos los promotores, con filtro de región) y los líderes (solo su región). Cuenta las
+**visitas con compra autogestionada** de `resultados_visitas` por su **`fecha_actualizacion`** (no por
+`fecha_visita`): cada visita cuenta una vez, con su fila más reciente, en el día en que se actualizó. Junto a ellas,
+**Visitas realizadas** son todas las visitas del periodo por su fecha de visita, con o sin compra (así una compra
+actualizada en el periodo puede venir de una visita anterior). Se filtra por Total, Mes, Semana o Rango y muestra:
+visitas con compra y su porcentaje sobre las visitas realizadas, visitas realizadas, promotores con compra, el primer
+lugar, el **ranking por promotor** (los empates comparten lugar; se descarga en CSV) y el detalle de las visitas con
+compra. En Total también cuentan las que no tienen fecha.
 
 ### Información del cliente (ficha)
 

@@ -6,7 +6,7 @@ import { idsDe, porGrupos, type Alcance, type PromotorEquipo } from './alcance'
 import { fetchAll } from './clientes'
 import { columnaLlave, columnasResultados, instante, masReciente } from './tablero'
 
-/** Una visita de resultados_visitas para el concurso: cuenta por su fecha de actualización, no por la de visita. */
+/** Una visita de resultados_visitas para el concurso: la compra cuenta por su fecha de actualización; la visita, por la suya. */
 export interface VisitaConcurso {
   key: string
   promotor: string | null
@@ -15,10 +15,12 @@ export interface VisitaConcurso {
   conCompra: boolean
   /** Fecha y hora de fecha_actualizacion, en milisegundos (null si la fila no la tiene). */
   actualizado: number | null
-  /** Día local "YYYY-MM-DD" de la actualización: con él se filtra el periodo. */
-  dia: string | null
-  /** Fecha de la visita (solo se muestra). */
+  /** Día local "YYYY-MM-DD" de la actualización: con él se cuentan las compras del periodo. */
+  diaActualizacion: string | null
+  /** Fecha de la visita (fecha_visita), en milisegundos. */
   fechaVisita: number | null
+  /** Día local de la visita: con él se cuentan las visitas del periodo (con o sin compra). */
+  diaVisita: string | null
 }
 
 export interface DatosConcurso {
@@ -61,6 +63,7 @@ export async function fetchConcurso(ctx: SchemaContext, alcance: Alcance): Promi
   const texto = (row: Row, col: string | undefined) => (col && !esVacio(row[col]) ? String(row[col]).trim() : null)
   const visitas = [...porVisita].map(([key, r]): VisitaConcurso => {
     const actualizado = c.actualizado ? instante(r[c.actualizado]) : null
+    const fechaVisita = c.fecha ? instante(r[c.fecha]) : null
     return {
       key,
       promotor: texto(r, c.usuario),
@@ -68,8 +71,9 @@ export async function fetchConcurso(ctx: SchemaContext, alcance: Alcance): Promi
       nombreCliente: texto(r, c.nombreCliente),
       conCompra: c.indicador ? toBoolean(r[c.indicador]) === true : false,
       actualizado,
-      dia: actualizado !== null ? isoLocal(new Date(actualizado)) : null,
-      fechaVisita: c.fecha ? instante(r[c.fecha]) : null,
+      diaActualizacion: actualizado !== null ? isoLocal(new Date(actualizado)) : null,
+      fechaVisita,
+      diaVisita: fechaVisita !== null ? isoLocal(new Date(fechaVisita)) : null,
     }
   })
   return { visitas, promotores: alcance.promotores, columnaActualizado: c.actualizado ?? null }
@@ -85,16 +89,24 @@ export interface FilaConcurso {
   visitas: number
 }
 
-/** Ranking por visitas con compra (más primero); en empate, por porcentaje y por nombre. */
-export function rankingConcurso(visitas: VisitaConcurso[], promotores: PromotorEquipo[]): FilaConcurso[] {
+/**
+ * Ranking por visitas con compra (más primero); en empate, por porcentaje y por nombre. `visitas` son las visitas
+ * del periodo (con o sin compra, por su fecha de visita) y `compras`, las visitas con compra actualizadas en él.
+ */
+export function rankingConcurso(visitas: VisitaConcurso[], compras: VisitaConcurso[], promotores: PromotorEquipo[]): FilaConcurso[] {
   const info = new Map(promotores.map((p) => [p.id, p]))
   const grupos = new Map<string | null, { conCompra: number; visitas: number }>()
-  for (const v of visitas) {
-    const g = grupos.get(v.promotor) ?? { conCompra: 0, visitas: 0 }
-    g.visitas++
-    if (v.conCompra) g.conCompra++
-    grupos.set(v.promotor, g)
+  const sumar = (lista: VisitaConcurso[], campo: 'conCompra' | 'visitas') => {
+    for (const v of lista) {
+      const g = grupos.get(v.promotor) ?? { conCompra: 0, visitas: 0 }
+      g[campo]++
+      grupos.set(v.promotor, g)
+    }
   }
+  sumar(visitas, 'visitas')
+  sumar(compras, 'conCompra')
+  // Sin visitas en el periodo (solo compras actualizadas), el porcentaje no se puede calcular: cuenta como 0.
+  const tasa = (g: { conCompra: number; visitas: number }) => (g.visitas ? g.conCompra / g.visitas : 0)
   const filas = [...grupos]
     .map(([id, g]) => ({
       id,
@@ -102,9 +114,6 @@ export function rankingConcurso(visitas: VisitaConcurso[], promotores: PromotorE
       region: id === null ? null : (info.get(id)?.region ?? null),
       ...g,
     }))
-    .sort(
-      (a, b) =>
-        b.conCompra - a.conCompra || b.conCompra / b.visitas - a.conCompra / a.visitas || a.nombre.localeCompare(b.nombre, 'es'),
-    )
+    .sort((a, b) => b.conCompra - a.conCompra || tasa(b) - tasa(a) || a.nombre.localeCompare(b.nombre, 'es'))
   return filas.map((f) => ({ ...f, lugar: 1 + filas.filter((o) => o.conCompra > f.conCompra).length }))
 }
