@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Award, CalendarClock, MapPin, RefreshCw, ShoppingCart, Trophy, Users } from 'lucide-react'
+import { CalendarClock, MapPin, RefreshCw, ShoppingCart, Trophy, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router'
 import { ErrorState } from '../components/ErrorState'
@@ -8,16 +8,15 @@ import { EncabezadoTablero } from '../components/tablero/Encabezado'
 import { FiltroRegion, SelectorPeriodo } from '../components/tablero/Filtros'
 import { TarjetaKpi } from '../components/tablero/TarjetaKpi'
 import { usePeriodo } from '../components/tablero/usePeriodo'
-import { Badge } from '../components/ui/Badge'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
 import { FaltaSqlRegiones, fetchAlcance, idsDe, opcionesRegion, SinRegion } from '../data/alcance'
-import { fetchConcurso, rankingConcurso, type VisitaConcurso } from '../data/concurso'
+import { fetchConcurso, rankingConcurso, type FilaConcurso, type VisitaConcurso } from '../data/concurso'
 import { useSchema } from '../data/hooks'
 import { aCsv, descargarArchivo } from '../lib/csv'
-import { capitalizar, formatoEntero, formatoFechaHora, porcentaje } from '../lib/formato'
+import { capitalizar, formatoEntero, formatoFechaHora } from '../lib/formato'
 import { hoyLocal, sumarDias } from '../lib/periodos'
 import { esAdmin, veEquipo } from '../lib/schema-resolver'
 import { normalize, plural } from '../lib/text'
@@ -31,7 +30,7 @@ const MEDALLA = ['bg-amber-400 text-amber-950', 'bg-slate-300 text-slate-900', '
 
 /**
  * Administradores (todos) y líderes (su región): las visitas con compra autogestionada contadas por su fecha de
- * actualización (para el concurso), junto a todas las visitas realizadas en el periodo (por su fecha de visita).
+ * actualización (para el concurso), con el ranking por promotor.
  */
 export function ConcursoPage() {
   const user = useUser()
@@ -59,46 +58,45 @@ export function ConcursoPage() {
   })
   const datos = query.data
 
-  const primerDia = useMemo(() => {
-    const dias = (datos?.visitas ?? []).flatMap((v) => [v.diaVisita, v.diaActualizacion]).filter((d): d is string => d !== null)
-    return dias.length ? dias.reduce((min, d) => (d < min ? d : min)) : null
-  }, [datos])
-  // En Total cuenta todo (también lo que no tiene fecha); si no, lo que cae en el periodo.
-  const delPeriodo = useMemo(() => {
-    const enPeriodo = (dia: string | null) => rango.periodo === 'total' || (dia !== null && dia >= rango.desde && dia < rango.hasta)
-    const lista = datos?.visitas ?? []
-    return {
-      // Todas las visitas realizadas en el periodo (por su fecha de visita), con o sin compra.
-      visitas: lista.filter((v) => enPeriodo(v.diaVisita)),
-      // Las compras por la fecha en que se actualizaron (aunque la visita sea de antes).
-      compras: lista.filter((v) => v.conCompra && enPeriodo(v.diaActualizacion)),
-    }
-  }, [datos, rango])
+  const primerDia = useMemo(
+    () =>
+      datos?.visitas.reduce<string | null>(
+        (min, v) => (v.conCompra && v.diaActualizacion && (!min || v.diaActualizacion < min) ? v.diaActualizacion : min),
+        null,
+      ) ?? null,
+    [datos],
+  )
+  // Las compras por la fecha en que se actualizaron (aunque la visita sea de antes). En Total, todas (también las
+  // que no tienen fecha).
+  const delPeriodo = useMemo(
+    () =>
+      datos?.visitas.filter(
+        (v) =>
+          v.conCompra &&
+          (rango.periodo === 'total' ||
+            (v.diaActualizacion !== null && v.diaActualizacion >= rango.desde && v.diaActualizacion < rango.hasta)),
+      ) ?? [],
+    [datos, rango],
+  )
   const regionPorPromotor = useMemo(() => new Map((datos?.promotores ?? []).map((p) => [p.id, normalize(p.region)])), [datos])
   const regionDe = (v: VisitaConcurso) => regionPorPromotor.get(v.promotor ?? '') ?? ''
   // Filtro de región: solo el admin (el líder ya solo ve su región).
   const regionesOpciones = useMemo(
     () =>
       admin
-        ? opcionesRegion(datos?.promotores ?? [], [
-            ...[...delPeriodo.visitas, ...delPeriodo.compras].map((v) => regionPorPromotor.get(v.promotor ?? '') ?? ''),
-            ...regiones,
-          ])
+        ? opcionesRegion(datos?.promotores ?? [], [...delPeriodo.map((v) => regionPorPromotor.get(v.promotor ?? '') ?? ''), ...regiones])
         : [],
     [admin, datos, delPeriodo, regionPorPromotor, regiones],
   )
-  const visitas = regiones.length ? delPeriodo.visitas.filter((v) => regiones.includes(regionDe(v))) : delPeriodo.visitas
-  const compras = (regiones.length ? delPeriodo.compras.filter((v) => regiones.includes(regionDe(v))) : delPeriodo.compras).sort(
+  const compras = (regiones.length ? delPeriodo.filter((v) => regiones.includes(regionDe(v))) : delPeriodo).sort(
     (a, b) => (b.actualizado ?? -Infinity) - (a.actualizado ?? -Infinity),
   )
-  const ranking = rankingConcurso(visitas, compras, datos?.promotores ?? [])
+  const ranking = rankingConcurso(compras, datos?.promotores ?? [])
   const nombres = useMemo(() => new Map((datos?.promotores ?? []).map((p) => [p.id, p.nombre])), [datos])
 
   if (ctxPending) return null
   if (!permitido) return <Navigate to="/" replace />
 
-  const conCompra = ranking.filter((f) => f.conCompra > 0)
-  const primeros = conCompra.filter((f) => f.lugar === 1)
   const sinFecha = datos?.visitas.filter((v) => v.conCompra && v.diaActualizacion === null).length ?? 0
   const error = alcanceQuery.error ?? query.error
   const region = alcance?.tipo === 'region' ? alcance.region : null
@@ -109,8 +107,6 @@ export function ConcursoPage() {
       Promotor: f.nombre,
       Región: f.region ? capitalizar(f.region) : '',
       'Visitas con compra': f.conCompra,
-      Visitas: f.visitas,
-      '% con compra': porcentaje(f.conCompra, f.visitas),
     }))
     const cuando = rango.periodo === 'total' ? 'total' : `${rango.desde}_a_${sumarDias(rango.hasta, -1)}`
     descargarArchivo(`concurso_${cuando}.csv`, aCsv(filas))
@@ -138,7 +134,7 @@ export function ConcursoPage() {
 
       <div className="mt-5 space-y-3">
         <FiltroRegion opciones={regionesOpciones} elegidas={regiones} onElegir={setRegiones} />
-        <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todas las visitas y compras" />
+        <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todas las compras" />
       </div>
 
       {error instanceof FaltaSqlRegiones || error instanceof SinRegion ? (
@@ -154,8 +150,8 @@ export function ConcursoPage() {
           El concurso lee la tabla resultados_visitas de Supabase. Revisa en Perfil → Verificar conexión.
         </EmptyState>
       ) : !datos ? (
-        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {Array.from({ length: 4 }, (_, i) => (
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:max-w-3xl">
+          {Array.from({ length: 2 }, (_, i) => (
             <Skeleton key={i} className="h-24 rounded-2xl" />
           ))}
         </div>
@@ -166,52 +162,22 @@ export function ConcursoPage() {
       ) : (
         <div className="mt-5">
           <EncabezadoTablero className="rounded-xl">Concurso de compras</EncabezadoTablero>
-          {visitas.length === 0 && compras.length === 0 ? (
+          {compras.length === 0 ? (
             <Card className="mt-3">
-              <EmptyState icon={Trophy} title="Sin visitas ni compras en este periodo">
+              <EmptyState icon={Trophy} title="Sin compras en este periodo">
                 Prueba con otro periodo{admin ? ' o con otra región' : ''}.
               </EmptyState>
             </Card>
           ) : (
             <>
-              <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="mt-3 grid grid-cols-2 gap-3 lg:max-w-3xl">
                 <TarjetaKpi
                   icono={ShoppingCart}
                   titulo="Visitas con compra autogestionada"
-                  extra={
-                    <Badge tone="success" className="mt-1 font-bold tabular-nums">
-                      {porcentaje(compras.length, visitas.length)}%
-                    </Badge>
-                  }
                   valor={formatoEntero(compras.length)}
-                  ayuda={`Compras actualizadas en el periodo (fecha_actualizacion): ${porcentaje(compras.length, visitas.length)}% de las ${formatoEntero(visitas.length)} visitas realizadas`}
+                  ayuda="Compras actualizadas en el periodo (por fecha_actualizacion)"
                 />
-                <TarjetaKpi
-                  icono={Users}
-                  titulo="Visitas realizadas"
-                  valor={formatoEntero(visitas.length)}
-                  ayuda="Todas las visitas del periodo por su fecha de visita, con o sin compra"
-                />
-                <TarjetaKpi
-                  icono={Award}
-                  titulo="Promotores con compra"
-                  valor={formatoEntero(conCompra.length)}
-                  ayuda={`De ${plural(ranking.length, 'promotor', 'promotores')} con visitas o compras en el periodo`}
-                />
-                <TarjetaKpi
-                  icono={Trophy}
-                  titulo="Primer lugar"
-                  extra={
-                    primeros.length > 0 && (
-                      <p className="mt-1 truncate text-xs font-semibold text-muted">
-                        {primeros[0].nombre}
-                        {primeros.length > 1 && ` y ${primeros.length - 1} más`}
-                      </p>
-                    )
-                  }
-                  valor={primeros.length ? formatoEntero(primeros[0].conCompra) : '—'}
-                  ayuda={primeros.map((f) => f.nombre).join(', ') || undefined}
-                />
+                <TarjetaLugar titulo="Primer lugar" icono={Trophy} filas={ranking.filter((f) => f.lugar === 1)} />
               </div>
               {rango.periodo === 'total' && sinFecha > 0 && (
                 <p className="mt-2 px-1 text-xs text-muted">
@@ -239,9 +205,7 @@ export function ConcursoPage() {
                       <tr>
                         <th className="w-14 py-2.5 pr-2 pl-4 text-left">Lugar</th>
                         <th className="px-2 py-2.5 text-left">Promotor</th>
-                        <th className="px-2 py-2.5 text-right">Con compra</th>
-                        <th className="px-2 py-2.5 text-right">Visitas</th>
-                        <th className="py-2.5 pr-4 pl-2 text-right">%</th>
+                        <th className="py-2.5 pr-4 pl-2 text-right">Con compra</th>
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
@@ -251,7 +215,7 @@ export function ConcursoPage() {
                             <span
                               className={cn(
                                 'grid size-7 place-items-center rounded-full text-xs font-bold',
-                                f.conCompra > 0 && f.lugar <= 3 ? MEDALLA[f.lugar - 1] : 'bg-soft text-muted',
+                                f.lugar <= 3 ? MEDALLA[f.lugar - 1] : 'bg-soft text-muted',
                               )}
                             >
                               {f.lugar}
@@ -261,9 +225,7 @@ export function ConcursoPage() {
                             <p className="font-semibold">{f.nombre}</p>
                             {f.region && <p className="text-xs text-muted">{capitalizar(f.region)}</p>}
                           </td>
-                          <td className="px-2 py-2.5 text-right font-bold">{formatoEntero(f.conCompra)}</td>
-                          <td className="px-2 py-2.5 text-right">{formatoEntero(f.visitas)}</td>
-                          <td className="py-2.5 pr-4 pl-2 text-right">{porcentaje(f.conCompra, f.visitas)}%</td>
+                          <td className="py-2.5 pr-4 pl-2 text-right font-bold">{formatoEntero(f.conCompra)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -277,6 +239,23 @@ export function ConcursoPage() {
         </div>
       )}
     </div>
+  )
+}
+
+/** Primer lugar: sus compras y quién (si hay empate, el primero y cuántos más; todos al pasar el mouse). */
+function TarjetaLugar({ titulo, icono, filas }: { titulo: string; icono: LucideIcon; filas: FilaConcurso[] }) {
+  return (
+    <TarjetaKpi
+      icono={icono}
+      titulo={titulo}
+      extra={
+        <p className="mt-1 truncate text-xs font-semibold text-muted">
+          {filas.length ? `${filas[0].nombre}${filas.length > 1 ? ` y ${filas.length - 1} más` : ''}` : 'Nadie todavía'}
+        </p>
+      }
+      valor={filas.length ? formatoEntero(filas[0].conCompra) : '—'}
+      ayuda={filas.length ? `${filas.map((f) => f.nombre).join(', ')}: ${plural(filas[0].conCompra, 'compra')}` : undefined}
+    />
   )
 }
 

@@ -6,7 +6,7 @@ import { idsDe, porGrupos, type Alcance, type PromotorEquipo } from './alcance'
 import { fetchAll } from './clientes'
 import { columnaLlave, columnasResultados, instante, masReciente } from './tablero'
 
-/** Una visita de resultados_visitas para el concurso: la compra cuenta por su fecha de actualización; la visita, por la suya. */
+/** Una visita de resultados_visitas para el concurso: la compra cuenta por su fecha de actualización. */
 export interface VisitaConcurso {
   key: string
   promotor: string | null
@@ -80,40 +80,27 @@ export async function fetchConcurso(ctx: SchemaContext, alcance: Alcance): Promi
 }
 
 export interface FilaConcurso {
-  /** Lugar en el ranking: los empates comparten lugar (1, 2, 2, 4). */
+  /** Lugar en el ranking: los empates comparten lugar y el siguiente es el que sigue (1, 1, 2, 3). */
   lugar: number
   id: string | null
   nombre: string
   region: string | null
   conCompra: number
-  visitas: number
 }
 
-/**
- * Ranking por visitas con compra (más primero); en empate, por porcentaje y por nombre. `visitas` son las visitas
- * del periodo (con o sin compra, por su fecha de visita) y `compras`, las visitas con compra actualizadas en él.
- */
-export function rankingConcurso(visitas: VisitaConcurso[], compras: VisitaConcurso[], promotores: PromotorEquipo[]): FilaConcurso[] {
+/** Ranking por visitas con compra del periodo (más primero; en empate, por nombre). Solo quienes tienen compras. */
+export function rankingConcurso(compras: VisitaConcurso[], promotores: PromotorEquipo[]): FilaConcurso[] {
   const info = new Map(promotores.map((p) => [p.id, p]))
-  const grupos = new Map<string | null, { conCompra: number; visitas: number }>()
-  const sumar = (lista: VisitaConcurso[], campo: 'conCompra' | 'visitas') => {
-    for (const v of lista) {
-      const g = grupos.get(v.promotor) ?? { conCompra: 0, visitas: 0 }
-      g[campo]++
-      grupos.set(v.promotor, g)
-    }
-  }
-  sumar(visitas, 'visitas')
-  sumar(compras, 'conCompra')
-  // Sin visitas en el periodo (solo compras actualizadas), el porcentaje no se puede calcular: cuenta como 0.
-  const tasa = (g: { conCompra: number; visitas: number }) => (g.visitas ? g.conCompra / g.visitas : 0)
-  const filas = [...grupos]
-    .map(([id, g]) => ({
+  const cuenta = new Map<string | null, number>()
+  for (const v of compras) cuenta.set(v.promotor, (cuenta.get(v.promotor) ?? 0) + 1)
+  const filas = [...cuenta]
+    .map(([id, conCompra]) => ({
       id,
       nombre: id === null ? 'Sin promotor' : (info.get(id)?.nombre ?? id),
       region: id === null ? null : (info.get(id)?.region ?? null),
-      ...g,
+      conCompra,
     }))
-    .sort((a, b) => b.conCompra - a.conCompra || tasa(b) - tasa(a) || a.nombre.localeCompare(b.nombre, 'es'))
-  return filas.map((f) => ({ ...f, lugar: 1 + filas.filter((o) => o.conCompra > f.conCompra).length }))
+    .sort((a, b) => b.conCompra - a.conCompra || a.nombre.localeCompare(b.nombre, 'es'))
+  const mejores = [...new Set(filas.map((f) => f.conCompra))]
+  return filas.map((f) => ({ ...f, lugar: 1 + mejores.filter((n) => n > f.conCompra).length }))
 }

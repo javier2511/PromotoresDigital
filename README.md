@@ -286,12 +286,10 @@ tablero solo con los promotores de su región (ver *Líderes por región*).
 
 La ven los admins (todos los promotores, con filtro de región) y los líderes (solo su región). Cuenta las
 **visitas con compra autogestionada** de `resultados_visitas` por su **`fecha_actualizacion`** (no por
-`fecha_visita`): cada visita cuenta una vez, con su fila más reciente, en el día en que se actualizó. Junto a ellas,
-**Visitas realizadas** son todas las visitas del periodo por su fecha de visita, con o sin compra (así una compra
-actualizada en el periodo puede venir de una visita anterior). Se filtra por Total, Mes, Semana o Rango y muestra:
-visitas con compra y su porcentaje sobre las visitas realizadas, visitas realizadas, promotores con compra, el primer
-lugar, el **ranking por promotor** (los empates comparten lugar; se descarga en CSV) y el detalle de las visitas con
-compra. En Total también cuentan las que no tienen fecha.
+`fecha_visita`): cada visita cuenta una vez, con su fila más reciente, en el día en que se actualizó. Se filtra por
+Total, Mes, Semana o Rango y muestra: el total de visitas con compra, el **primer lugar**, el **ranking por
+promotor** (solo quienes tienen compras; los empates comparten lugar y el siguiente es el que sigue: 1, 1, 2; se
+descarga en CSV) y el detalle de las visitas con compra. En Total también cuentan las que no tienen fecha.
 
 ### Información del cliente (ficha)
 
