@@ -27,6 +27,7 @@ import { GeoProvider } from './providers/GeoProvider'
 // Solo los usan los administradores: se descargan al abrirlos.
 const TableroPage = lazy(() => import('./pages/TableroPage').then((m) => ({ default: m.TableroPage })))
 const CrearUsuariosPage = lazy(() => import('./pages/CrearUsuariosPage').then((m) => ({ default: m.CrearUsuariosPage })))
+const ConcursoPage = lazy(() => import('./pages/ConcursoPage').then((m) => ({ default: m.ConcursoPage })))
 
 function Diferida({ children }: { children: ReactNode }) {
   return (
@@ -96,6 +97,14 @@ const router = createBrowserRouter([
         element: (
           <Diferida>
             <TableroPage />
+          </Diferida>
+        ),
+      },
+      {
+        path: 'concurso',
+        element: (
+          <Diferida>
+            <ConcursoPage />
           </Diferida>
         ),
       },

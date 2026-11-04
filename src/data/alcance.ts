@@ -1,3 +1,4 @@
+import { capitalizar } from '../lib/formato'
 import { esAdmin, type SchemaContext } from '../lib/schema-resolver'
 import { supabase } from '../lib/supabase'
 import { esVacio, normalize } from '../lib/text'
@@ -77,4 +78,27 @@ export async function porGrupos<T>(ids: string[] | null, leer: (grupo: string[] 
   const grupos: string[][] = []
   for (let i = 0; i < ids.length; i += GRUPO_IDS) grupos.push(ids.slice(i, i + GRUPO_IDS))
   return (await Promise.all(grupos.map((g) => leer(g)))).flat()
+}
+
+/** Una región del filtro del admin: `clave` sin mayúsculas ni acentos ('' = sin región). */
+export interface OpcionRegion {
+  clave: string
+  nombre: string
+}
+
+/**
+ * Regiones para el filtro del admin: las `claves` pedidas (las que tienen visitas y las elegidas), con su nombre como
+ * se escribió la primera vez, y "Sin región" al final. Vacío si ninguna es una región de verdad.
+ */
+export function opcionesRegion(promotores: { region?: string | null }[], claves: string[]): OpcionRegion[] {
+  const nombre = new Map<string, string>()
+  for (const p of promotores) {
+    const clave = normalize(p.region)
+    if (clave && !nombre.has(clave)) nombre.set(clave, capitalizar(p.region!.trim()))
+  }
+  const unicas = [...new Set(claves)]
+  if (!unicas.some(Boolean)) return []
+  return unicas
+    .map((clave) => ({ clave, nombre: clave ? (nombre.get(clave) ?? clave) : 'Sin región' }))
+    .sort((a, b) => Number(!a.clave) - Number(!b.clave) || a.nombre.localeCompare(b.nombre, 'es'))
 }

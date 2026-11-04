@@ -2,8 +2,6 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   CalendarDays,
   Check,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Download,
   FileClock,
@@ -13,25 +11,26 @@ import {
   ShoppingCart,
   TriangleAlert,
   Users,
-  type LucideIcon,
 } from 'lucide-react'
-import { useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router'
 import { toast } from 'sonner'
 import { ErrorState } from '../components/ErrorState'
 import { PageTitle } from '../components/PageHeader'
 import { EncabezadoTablero } from '../components/tablero/Encabezado'
+import { Chip, FILA_CHIPS, FiltroRegion, SelectorPeriodo } from '../components/tablero/Filtros'
 import { GraficaVisitas } from '../components/tablero/GraficaVisitas'
+import { TarjetaKpi } from '../components/tablero/TarjetaKpi'
+import { usePeriodo } from '../components/tablero/usePeriodo'
 import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
-import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Skeleton } from '../components/ui/Skeleton'
 import { Spinner } from '../components/ui/Spinner'
 import { RADIO_VISITA_M } from '../config/app'
-import { FaltaSqlRegiones, fetchAlcance, idsDe, SinRegion, type Alcance } from '../data/alcance'
+import { FaltaSqlRegiones, fetchAlcance, idsDe, opcionesRegion, SinRegion, type Alcance } from '../data/alcance'
 import { leerTablaCompleta, type FiltroDescarga } from '../data/descargas'
 import { useSchema } from '../data/hooks'
 import {
@@ -50,20 +49,13 @@ import {
 } from '../data/tablero'
 import { aCsv, descargarArchivo } from '../lib/csv'
 import { friendlyError } from '../lib/errors'
-import { capitalizar, formatoDecimal, formatoEntero, formatoFechaHora, formatoMetros, formatoMinutos, porcentaje } from '../lib/formato'
+import { formatoDecimal, formatoEntero, formatoFechaHora, formatoMetros, formatoMinutos, porcentaje } from '../lib/formato'
 import {
   deIso,
   DIAS_CORTOS,
-  diaMes,
   diasDelRango,
-  etiquetaPeriodo,
   hoyLocal,
-  moverPeriodo,
-  partesPeriodo,
   rangoDe,
-  rangoEntre,
-  sumarDias,
-  type Periodo,
 } from '../lib/periodos'
 import { esAdmin, veEquipo, type ResolvedTable, type SchemaContext } from '../lib/schema-resolver'
 import type { Row } from '../lib/supabase'
@@ -73,13 +65,6 @@ import { useUser } from '../providers/AuthProvider'
 /** Valor del filtro para las visitas sin promotor. */
 const SIN_PROMOTOR = '__sin__'
 
-const PERIODOS: { value: Periodo; label: string }[] = [
-  { value: 'total', label: 'Total' },
-  { value: 'mes', label: 'Mes' },
-  { value: 'semana', label: 'Semana' },
-  { value: 'rango', label: 'Rango' },
-]
-
 /** Encabezado de las tablas: una franja gris con el nombre de cada columna, fija al desplazarse. */
 const ENCABEZADO_TABLA = 'sticky top-0 z-10 bg-soft text-xs font-semibold text-fg shadow-[inset_0_-1px_0_var(--line)]'
 
@@ -88,67 +73,6 @@ const MAX_FILAS_DETALLE = 500
 const MAX_FILAS_CUESTIONARIO = 1000
 /** Respuestas que se leen: las de las visitas filtradas más recientes (en "Total" pueden ser miles). */
 const MAX_VISITAS_CUESTIONARIO = 200
-
-function Chip({ activo, children, className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { activo: boolean }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={activo}
-      className={cn(
-        'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold whitespace-nowrap transition disabled:cursor-default disabled:opacity-40',
-        activo ? 'border-brand-600 bg-brand-600 text-white' : 'border-line bg-card text-fg hover:bg-soft disabled:hover:bg-card',
-        className,
-      )}
-      {...props}
-    >
-      {activo && <Check className="size-4" strokeWidth={2.5} />}
-      {children}
-    </button>
-  )
-}
-
-/** Tarjeta de indicador como en el reporte: ícono a la izquierda, título arriba y el número abajo. */
-function TarjetaKpi({
-  icono: Icono,
-  insignia: Insignia,
-  titulo,
-  extra,
-  valor,
-  ayuda,
-}: {
-  icono: LucideIcon
-  /** Iconito sobre el principal (p. ej. un reloj sobre el carrito). */
-  insignia?: LucideIcon
-  titulo: string
-  /** Dato que acompaña al título (p. ej. el porcentaje). */
-  extra?: ReactNode
-  valor: string
-  /** Cómo se calculó (se ve al pasar el mouse). */
-  ayuda?: string
-}) {
-  // El número va en la última fila: así los de una misma fila de tarjetas se alinean aunque el título ocupe más
-  // líneas. En el teléfono va debajo del ícono, a todo lo ancho; en pantallas grandes, a la derecha del ícono.
-  return (
-    <Card
-      className="grid h-full grid-cols-[auto_minmax(0,1fr)] grid-rows-[1fr_auto] gap-x-3 gap-y-2 p-3.5 sm:p-4"
-      title={ayuda}
-    >
-      <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-700 sm:row-span-2 sm:size-14 sm:self-center dark:bg-brand-950/60 dark:text-brand-300">
-        <Icono className="size-5 sm:size-7" strokeWidth={1.8} />
-        {Insignia && (
-          <span className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full bg-card ring-2 ring-card">
-            <Insignia className="size-3.5" strokeWidth={2.5} />
-          </span>
-        )}
-      </span>
-      <div className="text-right">
-        <p className="text-[12px] leading-tight font-semibold sm:text-[13px]">{titulo}</p>
-        {extra}
-      </div>
-      <p className="col-span-2 self-end text-[26px] leading-none font-bold tracking-tight sm:col-span-1 sm:text-[28px]">{valor}</p>
-    </Card>
-  )
-}
 
 function Indicadores8({ ind }: { ind: Indicadores }) {
   // Visitas ÷ días ÷ promotores que sí trabajaron esos días (en promedio por día).
@@ -654,9 +578,6 @@ export function TableroPage() {
   const user = useUser()
   const { data: ctx, isPending: ctxPending } = useSchema()
   const hoy = hoyLocal()
-  // Primero se ve todo; luego se puede elegir un mes o una semana.
-  const [periodo, setPeriodo] = useState<Periodo>('total')
-  const [ancla, setAncla] = useState(hoy)
   /** Días elegidos de la semana (vacío: toda la semana). */
   const [dias, setDias] = useState<string[]>([])
   /** Promotores elegidos (vacío: todos). */
@@ -665,13 +586,12 @@ export function TableroPage() {
   const [regiones, setRegiones] = useState<string[]>([])
   /** Visita elegida en el detalle (sus respuestas se ven en el cuestionario). */
   const [visitaKey, setVisitaKey] = useState<string | null>(null)
-  /** Rango: de una fecha a otra (las dos incluidas). */
-  const [desdeRango, setDesdeRango] = useState(() => sumarDias(hoy, -13))
-  const [hastaRango, setHastaRango] = useState(hoy)
-  const rango = useMemo(
-    () => (periodo === 'rango' ? rangoEntre(desdeRango, hastaRango) : rangoDe(periodo, ancla)),
-    [periodo, ancla, desdeRango, hastaRango],
-  )
+  // Primero se ve todo; luego se puede elegir un mes, una semana o un rango. Al cambiar, se quitan días y visita.
+  const periodoElegido = usePeriodo(hoy, () => {
+    setDias([])
+    setVisitaKey(null)
+  })
+  const { periodo, rango } = periodoElegido
   const permitido = veEquipo(ctx)
   const admin = esAdmin(ctx)
   const sqlPermisos = admin ? 'supabase/11_admin_tablero.sql' : 'supabase/14_lideres_por_region.sql'
@@ -754,51 +674,18 @@ export function TableroPage() {
       .map((id) => ({ id, nombre: id === SIN_PROMOTOR ? 'Sin promotor' : (nombres.get(id) ?? id) }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   }, [delRegion, elegidos, nombres])
-  // Filtro de región (solo el admin): las de los promotores con visitas en el periodo (y las elegidas). Si nadie
-  // tiene región, no aparece.
-  const opcionesRegion = useMemo(() => {
-    if (!admin) return []
-    const nombre = new Map<string, string>()
-    for (const p of datos?.promotores ?? []) {
-      const clave = normalize(p.region)
-      if (clave && !nombre.has(clave)) nombre.set(clave, capitalizar(p.region!.trim()))
-    }
-    const claves = [...new Set([...delPeriodo.map((v) => regionPorPromotor.get(v.promotor ?? '') ?? ''), ...regiones])]
-    if (!claves.some(Boolean)) return []
-    return claves
-      .map((clave) => ({ clave, nombre: clave ? (nombre.get(clave) ?? clave) : 'Sin región' }))
-      .sort((a, b) => Number(!a.clave) - Number(!b.clave) || a.nombre.localeCompare(b.nombre, 'es'))
-  }, [admin, datos, delPeriodo, regionPorPromotor, regiones])
+  // Filtro de región (solo el admin): las de los promotores con visitas en el periodo (y las elegidas).
+  const regionesOpciones = useMemo(
+    () =>
+      admin
+        ? opcionesRegion(datos?.promotores ?? [], [...delPeriodo.map((v) => regionPorPromotor.get(v.promotor ?? '') ?? ''), ...regiones])
+        : [],
+    [admin, datos, delPeriodo, regionPorPromotor, regiones],
+  )
 
   if (ctxPending) return null
   if (!permitido) return <Navigate to="/" replace />
 
-  const irA = (fecha: string) => {
-    setAncla(fecha)
-    setDias([])
-    setVisitaKey(null)
-  }
-  const cambiarPeriodo = (p: Periodo) => {
-    // El rango empieza con lo que se estaba viendo: desde la primera visita (total) o el mes o la semana elegidos.
-    if (p === 'rango' && periodo !== 'rango') {
-      setDesdeRango(periodo === 'total' ? (primerDia ?? sumarDias(hoy, -13)) : rango.desde)
-      const fin = sumarDias(rango.hasta, -1)
-      setHastaRango(periodo === 'total' || fin > hoy ? hoy : fin)
-    }
-    setPeriodo(p)
-    setDias([])
-    setVisitaKey(null)
-  }
-  const cambiarDesde = (fecha: string) => {
-    setDesdeRango(fecha)
-    if (fecha > hastaRango) setHastaRango(fecha)
-    setVisitaKey(null)
-  }
-  const cambiarHasta = (fecha: string) => {
-    setHastaRango(fecha)
-    if (fecha < desdeRango) setDesdeRango(fecha)
-    setVisitaKey(null)
-  }
   const alternar = <T,>(lista: T[], x: T) => (lista.includes(x) ? lista.filter((y) => y !== x) : [...lista, x])
   // Al cambiar de región se quitan los promotores elegidos (podrían ser de otra).
   const elegirRegiones = (lista: string[]) => {
@@ -819,12 +706,7 @@ export function TableroPage() {
     }
   }
 
-  const siguiente = moverPeriodo(periodo, ancla, 1)
-  const hayFuturo = rangoDe(periodo, siguiente).desde <= hoy
-  const esActual = rango.desde <= hoy && hoy < rango.hasta
-  const periodoTexto = partesPeriodo(rango, hoy)
   const cargandoOtro = query.isFetching && query.isPlaceholderData
-  const filaScroll = '-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0'
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
@@ -858,28 +740,10 @@ export function TableroPage() {
 
       {/* Filtros: arriba de todo lo que cambian (como los del reporte: promotor, semana y días). */}
       <div className="mt-5 space-y-3">
-        {opcionesRegion.length > 0 && (
-          <div>
-            <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Región</p>
-            <div className={filaScroll} role="group" aria-label="Región">
-              <Chip activo={regiones.length === 0} onClick={() => elegirRegiones([])}>
-                Todas
-              </Chip>
-              {opcionesRegion.map((o) => (
-                <Chip
-                  key={o.clave || '__sin__'}
-                  activo={regiones.includes(o.clave)}
-                  onClick={() => elegirRegiones(alternar(regiones, o.clave))}
-                >
-                  {o.nombre}
-                </Chip>
-              ))}
-            </div>
-          </div>
-        )}
+        <FiltroRegion opciones={regionesOpciones} elegidas={regiones} onElegir={elegirRegiones} />
         <div>
           <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Promotor</p>
-          <div className={filaScroll} role="group" aria-label="Promotor">
+          <div className={FILA_CHIPS} role="group" aria-label="Promotor">
             <Chip activo={elegidos.length === 0} onClick={() => setElegidos([])}>
               Todos
             </Chip>
@@ -890,99 +754,9 @@ export function TableroPage() {
             ))}
           </div>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SegmentedControl label="Periodo" value={periodo} onChange={cambiarPeriodo} options={PERIODOS} className="sm:w-96" />
-          {periodo === 'rango' ? (
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              {(
-                [
-                  ['Desde', desdeRango, cambiarDesde, undefined, hoy],
-                  ['Hasta', hastaRango, cambiarHasta, desdeRango, hoy],
-                ] as const
-              ).map(([etiqueta, valor, cambiar, min, max]) => (
-                <label
-                  key={etiqueta}
-                  className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-card px-3 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 sm:max-w-52"
-                >
-                  <span className="shrink-0 text-xs font-semibold text-muted">{etiqueta}</span>
-                  <input
-                    type="date"
-                    value={valor}
-                    min={min}
-                    max={max}
-                    onChange={(e) => e.target.value && cambiar(e.target.value)}
-                    aria-label={etiqueta}
-                    className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-fg outline-none"
-                  />
-                </label>
-              ))}
-            </div>
-          ) : periodo === 'total' ? (
-            <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-card px-3 sm:max-w-72">
-              <CalendarDays className="size-4 shrink-0 text-muted" />
-              <span className="flex min-w-0 flex-col items-start leading-tight">
-                <span className="truncate text-[15px] font-semibold">Todas las visitas</span>
-                {primerDia && <span className="text-[11px] font-medium text-muted">Desde el {diaMes(primerDia)}</span>}
-              </span>
-            </div>
-          ) : (
-            <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => irA(moverPeriodo(periodo, ancla, -1))}
-                aria-label="Periodo anterior"
-                className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-card text-fg hover:bg-soft"
-              >
-                <ChevronLeft className="size-5" />
-              </button>
-              <label
-                title={etiquetaPeriodo(rango, hoy)}
-                className="relative flex h-11 min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-line bg-card px-3 hover:bg-soft sm:max-w-72"
-              >
-                <CalendarDays className="size-4 shrink-0 text-muted" />
-                <span className="flex min-w-0 flex-col items-start leading-tight">
-                  {periodoTexto.detalle && <span className="text-[11px] font-medium text-muted">{periodoTexto.detalle}</span>}
-                  <span className="truncate text-[15px] font-semibold">{periodoTexto.titulo}</span>
-                </span>
-                <input
-                  type="date"
-                  value={ancla}
-                  max={hoy}
-                  onChange={(e) => e.target.value && irA(e.target.value)}
-                  onClick={(e) => {
-                    try {
-                      e.currentTarget.showPicker()
-                    } catch {
-                      /* el navegador abre su selector */
-                    }
-                  }}
-                  aria-label="Elegir fecha"
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => irA(siguiente)}
-                disabled={!hayFuturo}
-                aria-label="Periodo siguiente"
-                className="grid size-11 shrink-0 place-items-center rounded-xl border border-line bg-card text-fg hover:bg-soft disabled:opacity-40 disabled:hover:bg-card"
-              >
-                <ChevronRight className="size-5" />
-              </button>
-              {!esActual && (
-                <button
-                  type="button"
-                  onClick={() => irA(hoy)}
-                  className="h-11 shrink-0 rounded-xl border border-line bg-card px-4 text-sm font-semibold hover:bg-soft"
-                >
-                  Hoy
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        <SelectorPeriodo p={periodoElegido} hoy={hoy} primerDia={primerDia} />
         {periodo === 'semana' && (
-          <div className={filaScroll} role="group" aria-label="Días">
+          <div className={FILA_CHIPS} role="group" aria-label="Días">
             <Chip activo={dias.length === 0} onClick={() => setDias([])}>
               Toda la semana
             </Chip>

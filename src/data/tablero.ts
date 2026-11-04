@@ -161,7 +161,7 @@ export interface ColumnasTablero {
 }
 
 /** De varias filas de la misma visita queda la más reciente (por fecha de actualización y luego por id). */
-function masReciente(a: Row, b: Row, c: ColumnasTablero['r']): Row {
+export function masReciente(a: Row, b: Row, c: ColumnasTablero['r']): Row {
   const fa = c.actualizado ? (instante(a[c.actualizado]) ?? -Infinity) : -Infinity
   const fb = c.actualizado ? (instante(b[c.actualizado]) ?? -Infinity) : -Infinity
   if (fa !== fb) return fb > fa ? b : a

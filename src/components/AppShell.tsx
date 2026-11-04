@@ -1,4 +1,4 @@
-import { ChartColumn, CircleUserRound, LayoutDashboard, Map as MapIcon, Store, Users, type LucideIcon } from 'lucide-react'
+import { ChartColumn, CircleUserRound, LayoutDashboard, Map as MapIcon, Store, Trophy, Users, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet, ScrollRestoration, useMatches } from 'react-router'
 import { useClientes, useSchema } from '../data/hooks'
 import { esAdmin, esLider } from '../lib/schema-resolver'
@@ -25,11 +25,12 @@ const NAV: NavItem[] = [
   { to: '/perfil', label: 'Perfil', icon: CircleUserRound },
 ]
 
-/** Administradores (rol admin): indicadores de todas las visitas y jornadas del equipo. Líderes: solo el Tablero. */
+/** Administradores (rol admin): indicadores de todas las visitas, el concurso y las jornadas. Líderes: solo el Tablero. */
 const TABLERO: NavItem = { to: '/tablero', label: 'Tablero', icon: LayoutDashboard }
+const CONCURSO: NavItem = { to: '/concurso', label: 'Concurso', icon: Trophy }
 const EQUIPO: NavItem = { to: '/equipo', label: 'Equipo', icon: Users }
 
-const COLUMNAS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5', 6: 'grid-cols-6' }
+const COLUMNAS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5', 6: 'grid-cols-6', 7: 'grid-cols-7' }
 
 function useRouteHandle(): RouteHandle {
   const matches = useMatches()
@@ -59,8 +60,10 @@ export function AppShell() {
   const { user } = useAuth()
   const { data: ctx } = useSchema()
   useAsegurarPerfil()
-  const extra = esAdmin(ctx) ? [TABLERO, EQUIPO] : esLider(ctx) ? [TABLERO] : []
+  const extra = esAdmin(ctx) ? [TABLERO, CONCURSO, EQUIPO] : esLider(ctx) ? [TABLERO] : []
   const nav = [...NAV.slice(0, 3), ...extra, NAV[3]]
+  // Con 7 pestañas (admin) la barra del teléfono se compacta un poco para que quepan.
+  const compacta = nav.length >= 7
 
   return (
     <div className="min-h-dvh">
@@ -118,7 +121,8 @@ export function AppShell() {
                 end={end}
                 className={({ isActive }) =>
                   cn(
-                    'group flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition',
+                    'group flex min-w-0 flex-col items-center justify-center gap-0.5 font-semibold transition',
+                    compacta ? 'text-[10px] tracking-tight' : 'text-[11px]',
                     isActive ? 'text-brand-700 dark:text-brand-300' : 'text-muted',
                   )
                 }
@@ -127,13 +131,14 @@ export function AppShell() {
                   <>
                     <span
                       className={cn(
-                        'grid h-8 w-14 place-items-center rounded-full transition',
+                        'grid h-8 place-items-center rounded-full transition',
+                        compacta ? 'w-11' : 'w-14',
                         isActive && 'bg-brand-500/12',
                       )}
                     >
                       <Icon className="size-[22px]" strokeWidth={isActive ? 2.4 : 2} />
                     </span>
-                    {label}
+                    <span className={cn('max-w-full', compacta && 'truncate')}>{label}</span>
                   </>
                 )}
               </NavLink>
