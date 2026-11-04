@@ -1,5 +1,5 @@
 import { capitalizar } from '../lib/formato'
-import { esAdmin, type SchemaContext } from '../lib/schema-resolver'
+import { esAdmin, esLider, type SchemaContext } from '../lib/schema-resolver'
 import { supabase } from '../lib/supabase'
 import { esVacio, normalize } from '../lib/text'
 import { fetchAll } from './clientes'
@@ -10,10 +10,11 @@ export interface PromotorEquipo {
   region: string | null
 }
 
-/** A quiénes ve el usuario en el Tablero y en Resultados: un admin, a todos; un líder, a los de su región. */
+/** A quiénes ve el usuario: un admin, a todos; un líder, a los de su región; un promotor, solo a sí mismo (Concurso). */
 export type Alcance =
   | { tipo: 'todos'; promotores: PromotorEquipo[] }
   | { tipo: 'region'; region: string; promotores: PromotorEquipo[] }
+  | { tipo: 'propio'; ids: string[]; promotores: PromotorEquipo[] }
 
 /** Falta ejecutar supabase/14_lideres_por_region.sql (la función region_lider no existe). */
 export class FaltaSqlRegiones extends Error {
@@ -48,9 +49,15 @@ export async function leerPromotores(ctx: SchemaContext): Promise<PromotorEquipo
   })
 }
 
-export async function fetchAlcance(ctx: SchemaContext): Promise<Alcance> {
+export async function fetchAlcance(ctx: SchemaContext, userId?: string): Promise<Alcance> {
   // Para el admin los nombres son opcionales: si no se pueden leer, se muestra el id.
   if (esAdmin(ctx)) return { tipo: 'todos', promotores: await leerPromotores(ctx).catch(() => []) }
+  // Un promotor: solo sus filas (por su id de promotor o de usuario).
+  if (!esLider(ctx)) {
+    const ids = [...new Set([ctx.perfil?.id, userId].filter((id) => id !== undefined && id !== null && id !== '').map(String))]
+    const yo = (await leerPromotores(ctx).catch(() => [])).filter((p) => ids.includes(p.id))
+    return { tipo: 'propio', ids, promotores: yo }
+  }
   const [{ data, error }, promotores] = await Promise.all([supabase.rpc('region_lider'), leerPromotores(ctx)])
   if (error) {
     if (error.code === 'PGRST202' || /could not find the function/i.test(error.message)) throw new FaltaSqlRegiones()
@@ -68,7 +75,7 @@ export async function fetchAlcance(ctx: SchemaContext): Promise<Alcance> {
 
 /** Ids de los promotores a los que se limitan las consultas (null: todos). */
 export const idsDe = (alcance: Alcance): string[] | null =>
-  alcance.tipo === 'todos' ? null : alcance.promotores.map((p) => p.id)
+  alcance.tipo === 'todos' ? null : alcance.tipo === 'propio' ? alcance.ids : alcance.promotores.map((p) => p.id)
 
 const GRUPO_IDS = 100
 

@@ -284,7 +284,8 @@ tablero solo con los promotores de su región (ver *Líderes por región*).
 
 ### Pestaña Concurso (Resultados concurso)
 
-La ven los admins (todos los promotores, con filtro de región) y los líderes (solo su región). Cuenta las
+La ven todos: los admins, de todos los promotores (con filtro de región); los líderes, solo de su región; y cada
+promotor, **solo su avance** (sus compras y su detalle, sin ranking ni primer lugar). Cuenta las
 **visitas con compra autogestionada** de `resultados_visitas` por su **`fecha_actualizacion`** (no por
 `fecha_visita`): cada visita cuenta una vez, con su fila más reciente, en el día en que se actualizó. Se filtra por
 Total, Mes, Semana o Rango y muestra: el total de visitas con compra, el **primer lugar**, el **ranking por

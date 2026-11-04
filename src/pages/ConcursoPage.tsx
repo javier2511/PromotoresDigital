@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { CalendarClock, MapPin, RefreshCw, ShoppingCart, Trophy, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Navigate } from 'react-router'
 import { ErrorState } from '../components/ErrorState'
 import { PageTitle } from '../components/PageHeader'
 import { EncabezadoTablero } from '../components/tablero/Encabezado'
@@ -29,15 +28,16 @@ const MAX_FILAS_COMPRAS = 500
 const MEDALLA = ['bg-amber-400 text-amber-950', 'bg-slate-300 text-slate-900', 'bg-orange-300 text-orange-950']
 
 /**
- * Administradores (todos) y líderes (su región): las visitas con compra autogestionada contadas por su fecha de
- * actualización (para el concurso), con el ranking por promotor.
+ * Las visitas con compra autogestionada contadas por su fecha de actualización (para el concurso). Los admins ven a
+ * todos (con ranking y filtro de región); los líderes, a los de su región; cada promotor, solo su avance.
  */
 export function ConcursoPage() {
   const user = useUser()
   const { data: ctx, isPending: ctxPending } = useSchema()
   const hoy = hoyLocal()
-  const permitido = veEquipo(ctx)
   const admin = esAdmin(ctx)
+  // Admin y líder ven el ranking de su equipo; el promotor, solo lo suyo.
+  const equipo = veEquipo(ctx)
   /** Regiones elegidas (sin mayúsculas ni acentos; '' = sin región; vacío: todas). */
   const [regiones, setRegiones] = useState<string[]>([])
   const periodo = usePeriodo(hoy)
@@ -45,15 +45,15 @@ export function ConcursoPage() {
 
   const alcanceQuery = useQuery({
     queryKey: ['alcance', user.id, ctx?.perfil?.rol, ctx?.perfil?.region],
-    queryFn: () => fetchAlcance(ctx!),
-    enabled: Boolean(ctx && permitido),
+    queryFn: () => fetchAlcance(ctx!, user.id),
+    enabled: Boolean(ctx),
     staleTime: 5 * 60_000,
   })
   const alcance = alcanceQuery.data
   const query = useQuery({
     queryKey: ['concurso', user.id, alcance ? idsDe(alcance) : null],
     queryFn: () => fetchConcurso(ctx!, alcance!),
-    enabled: Boolean(ctx && permitido && alcance && ctx.tables.resultados.table),
+    enabled: Boolean(ctx && alcance && ctx.tables.resultados.table),
     staleTime: 2 * 60_000,
   })
   const datos = query.data
@@ -95,7 +95,6 @@ export function ConcursoPage() {
   const nombres = useMemo(() => new Map((datos?.promotores ?? []).map((p) => [p.id, p.nombre])), [datos])
 
   if (ctxPending) return null
-  if (!permitido) return <Navigate to="/" replace />
 
   const sinFecha = datos?.visitas.filter((v) => v.conCompra && v.diaActualizacion === null).length ?? 0
   const error = alcanceQuery.error ?? query.error
@@ -116,7 +115,11 @@ export function ConcursoPage() {
     <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
       <PageTitle
         title="Resultados concurso"
-        subtitle={`Compras autogestionadas por fecha de actualización${region ? ` · Región ${region}` : ''}`}
+        subtitle={
+          equipo
+            ? `Compras autogestionadas por fecha de actualización${region ? ` · Región ${region}` : ''}`
+            : 'Tus compras autogestionadas por fecha de actualización'
+        }
         actions={
           <button
             type="button"
@@ -164,20 +167,20 @@ export function ConcursoPage() {
           <EncabezadoTablero className="rounded-xl">Concurso de compras</EncabezadoTablero>
           {compras.length === 0 ? (
             <Card className="mt-3">
-              <EmptyState icon={Trophy} title="Sin compras en este periodo">
+              <EmptyState icon={Trophy} title={equipo ? 'Sin compras en este periodo' : 'Aún no tienes compras en este periodo'}>
                 Prueba con otro periodo{admin ? ' o con otra región' : ''}.
               </EmptyState>
             </Card>
           ) : (
             <>
-              <div className="mt-3 grid grid-cols-2 gap-3 lg:max-w-3xl">
+              <div className={cn('mt-3 grid gap-3', equipo ? 'grid-cols-2 lg:max-w-3xl' : 'max-w-sm grid-cols-1')}>
                 <TarjetaKpi
                   icono={ShoppingCart}
-                  titulo="Visitas con compra autogestionada"
+                  titulo={equipo ? 'Visitas con compra autogestionada' : 'Tus visitas con compra autogestionada'}
                   valor={formatoEntero(compras.length)}
                   ayuda="Compras actualizadas en el periodo (por fecha_actualizacion)"
                 />
-                <TarjetaLugar titulo="Primer lugar" icono={Trophy} filas={ranking.filter((f) => f.lugar === 1)} />
+                {equipo && <TarjetaLugar titulo="Primer lugar" icono={Trophy} filas={ranking.filter((f) => f.lugar === 1)} />}
               </div>
               {rango.periodo === 'total' && sinFecha > 0 && (
                 <p className="mt-2 px-1 text-xs text-muted">
@@ -185,55 +188,57 @@ export function ConcursoPage() {
                 </p>
               )}
 
-              <Card id="ranking" className="mt-3 overflow-hidden">
-                <EncabezadoTablero
-                  accion={
-                    <button
-                      type="button"
-                      onClick={descargarRanking}
-                      className="h-8 shrink-0 rounded-lg px-2 text-sm font-semibold text-white/90 hover:bg-white/10"
-                    >
-                      Descargar
-                    </button>
-                  }
-                >
-                  Ranking por promotor
-                </EncabezadoTablero>
-                <div className="max-h-[32rem] overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead className={ENCABEZADO_TABLA}>
-                      <tr>
-                        <th className="w-14 py-2.5 pr-2 pl-4 text-left">Lugar</th>
-                        <th className="px-2 py-2.5 text-left">Promotor</th>
-                        <th className="py-2.5 pr-4 pl-2 text-right">Con compra</th>
-                      </tr>
-                    </thead>
-                    <tbody className="tabular-nums">
-                      {ranking.map((f) => (
-                        <tr key={f.id ?? '__sin__'} className="border-b border-line last:border-0">
-                          <td className="py-2.5 pr-2 pl-4">
-                            <span
-                              className={cn(
-                                'grid size-7 place-items-center rounded-full text-xs font-bold',
-                                f.lugar <= 3 ? MEDALLA[f.lugar - 1] : 'bg-soft text-muted',
-                              )}
-                            >
-                              {f.lugar}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2.5">
-                            <p className="font-semibold">{f.nombre}</p>
-                            {f.region && <p className="text-xs text-muted">{capitalizar(f.region)}</p>}
-                          </td>
-                          <td className="py-2.5 pr-4 pl-2 text-right font-bold">{formatoEntero(f.conCompra)}</td>
+              {equipo && (
+                <Card id="ranking" className="mt-3 overflow-hidden">
+                  <EncabezadoTablero
+                    accion={
+                      <button
+                        type="button"
+                        onClick={descargarRanking}
+                        className="h-8 shrink-0 rounded-lg px-2 text-sm font-semibold text-white/90 hover:bg-white/10"
+                      >
+                        Descargar
+                      </button>
+                    }
+                  >
+                    Ranking por promotor
+                  </EncabezadoTablero>
+                  <div className="max-h-[32rem] overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className={ENCABEZADO_TABLA}>
+                        <tr>
+                          <th className="w-14 py-2.5 pr-2 pl-4 text-left">Lugar</th>
+                          <th className="px-2 py-2.5 text-left">Promotor</th>
+                          <th className="py-2.5 pr-4 pl-2 text-right">Con compra</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
+                      </thead>
+                      <tbody className="tabular-nums">
+                        {ranking.map((f) => (
+                          <tr key={f.id ?? '__sin__'} className="border-b border-line last:border-0">
+                            <td className="py-2.5 pr-2 pl-4">
+                              <span
+                                className={cn(
+                                  'grid size-7 place-items-center rounded-full text-xs font-bold',
+                                  f.lugar <= 3 ? MEDALLA[f.lugar - 1] : 'bg-soft text-muted',
+                                )}
+                              >
+                                {f.lugar}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2.5">
+                              <p className="font-semibold">{f.nombre}</p>
+                              {f.region && <p className="text-xs text-muted">{capitalizar(f.region)}</p>}
+                            </td>
+                            <td className="py-2.5 pr-4 pl-2 text-right font-bold">{formatoEntero(f.conCompra)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
 
-              <DetalleCompras compras={compras} nombres={nombres} />
+              <DetalleCompras compras={compras} nombres={equipo ? nombres : null} />
             </>
           )}
         </div>
@@ -259,20 +264,20 @@ function TarjetaLugar({ titulo, icono, filas }: { titulo: string; icono: LucideI
   )
 }
 
-/** Las visitas con compra del periodo, de la actualización más reciente a la más vieja. */
-function DetalleCompras({ compras, nombres }: { compras: VisitaConcurso[]; nombres: Map<string, string> }) {
+/** Las visitas con compra del periodo, de la actualización más reciente a la más vieja (sin `nombres`: las propias). */
+function DetalleCompras({ compras, nombres }: { compras: VisitaConcurso[]; nombres: Map<string, string> | null }) {
   if (compras.length === 0) return null
   return (
     <Card id="compras" className="mt-3 overflow-hidden">
       <EncabezadoTablero accion={<span className="text-sm text-white/85">{plural(compras.length, 'visita')}</span>}>
-        Visitas con compra
+        {nombres ? 'Visitas con compra' : 'Tus visitas con compra'}
       </EncabezadoTablero>
       <div className="max-h-[32rem] overflow-auto">
         <table className="w-full text-sm">
           <thead className={ENCABEZADO_TABLA}>
             <tr>
               <th className="py-2.5 pr-2 pl-4 text-left">Cliente</th>
-              <th className="px-2 py-2.5 text-left">Promotor</th>
+              {nombres && <th className="px-2 py-2.5 text-left">Promotor</th>}
               <th className="px-2 py-2.5 text-left">Actualización</th>
               <th className="py-2.5 pr-4 pl-2 text-left">Visita</th>
             </tr>
@@ -284,7 +289,9 @@ function DetalleCompras({ compras, nombres }: { compras: VisitaConcurso[]; nombr
                   <p className="font-semibold tabular-nums">{v.cliente ?? '—'}</p>
                   {v.nombreCliente && <p className="text-xs text-muted">{v.nombreCliente}</p>}
                 </td>
-                <td className="px-2 py-2.5">{v.promotor ? (nombres.get(v.promotor) ?? v.promotor) : 'Sin promotor'}</td>
+                {nombres && (
+                  <td className="px-2 py-2.5">{v.promotor ? (nombres.get(v.promotor) ?? v.promotor) : 'Sin promotor'}</td>
+                )}
                 <td className="px-2 py-2.5 whitespace-nowrap tabular-nums">{formatoFechaHora(v.actualizado)}</td>
                 <td className="py-2.5 pr-4 pl-2 whitespace-nowrap text-muted tabular-nums">{formatoFechaHora(v.fechaVisita)}</td>
               </tr>
