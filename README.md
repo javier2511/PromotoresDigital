@@ -157,8 +157,13 @@ mandártelo; con eso se sabe exactamente qué ajustar (casi siempre una polític
 error también se incluye en *Copiar reporte* de **Verificar conexión**.
 
 Si se corta la señal a mitad del guardado, las respuestas siguen en el teléfono y al reintentar se reutiliza
-la visita ya creada (no se duplica). Si la app no logra identificar qué clientes son del usuario no muestra
-ninguno (nunca los de otros promotores).
+la visita ya creada (no se duplica). Esto vale también cuando la visita sí llegó a Supabase pero la respuesta
+no llegó al teléfono: antes de guardar, la app busca una visita del mismo promotor, al mismo cliente y con la
+misma `hora_inicio` (la del borrador) y, si existe, la usa; con las respuestas igual (si ya están, no las vuelve
+a mandar). Y si el promotor ya registró hoy una visita a un cliente que sigue pendiente, la ficha se lo avisa
+("Hoy a las … ya registraste una visita a este cliente") y le pide confirmar antes de registrar otra.
+
+Si la app no logra identificar qué clientes son del usuario no muestra ninguno (nunca los de otros promotores).
 
 ### Ver desde dónde se hizo cada visita
 

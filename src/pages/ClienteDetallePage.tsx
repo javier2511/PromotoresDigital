@@ -7,7 +7,7 @@ import { ClienteInfo } from '../components/ClienteInfo'
 import { Reseteado } from '../components/Reseteado'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
-import { StartVisitButton, useVisitGate, VisitGateCard, type VisitStart } from '../components/VisitGate'
+import { AvisoVisitaHoy, StartVisitButton, useVisitGate, VisitGateCard, type VisitStart } from '../components/VisitGate'
 import { Badge } from '../components/ui/Badge'
 import { Button, ButtonLink, buttonClass } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -187,6 +187,7 @@ export function ClienteDetallePage() {
         </Card>
 
         {/* Validación de distancia */}
+        {!cliente.visitado && !draft && <AvisoVisitaHoy cliente={cliente} />}
         {!cliente.visitado && !draft && <VisitGateCard gate={gate} />}
 
         {/* Información del cliente (solo los datos configurados) */}

@@ -7,6 +7,7 @@ import { useGeo, type GeoPosition } from '../providers/GeoProvider'
 import { fetchClientes, type Cliente } from './clientes'
 import { fetchFormulario } from './formulario'
 import { fetchResultados } from './resultados'
+import { visitaDeHoy } from './visitas'
 
 export const queryKeys = {
   schema: (userId: string) => ['schema', userId] as const,
@@ -14,6 +15,7 @@ export const queryKeys = {
   formulario: (userId: string) => ['formulario', userId] as const,
   resultados: (userId: string) => ['resultados', userId] as const,
   jornada: (userId: string) => ['jornada', userId] as const,
+  visitaHoy: (userId: string, clienteKey: string | undefined) => ['visita-hoy', userId, clienteKey] as const,
 }
 
 export function useSchema() {
@@ -113,4 +115,17 @@ export function useResultados(clienteKeys: Set<string> | undefined) {
     error: schema.error ?? query.error,
     refetch: () => (schema.error ? schema.refetch() : query.refetch()),
   }
+}
+
+/** Hora de la última visita de hoy del usuario a ese cliente (null si no tiene): para avisar antes de registrar otra. */
+export function useVisitaDeHoy(cliente: Cliente | undefined): number | null {
+  const user = useUser()
+  const schema = useSchema()
+  const query = useQuery({
+    queryKey: queryKeys.visitaHoy(user.id, cliente?.key),
+    queryFn: () => visitaDeHoy(schema.data!, user, cliente!),
+    enabled: Boolean(schema.data && cliente),
+    staleTime: 30_000,
+  })
+  return query.data ?? null
 }

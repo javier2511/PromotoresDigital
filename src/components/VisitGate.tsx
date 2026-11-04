@@ -1,11 +1,15 @@
-import { CircleCheck, LocateFixed, LocateOff, MapPinOff, Navigation, Play, SatelliteDish } from 'lucide-react'
+import { CircleCheck, LocateFixed, LocateOff, MapPinOff, Navigation, Play, SatelliteDish, TriangleAlert } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { RADIO_VISITA_M } from '../config/app'
 import type { Cliente } from '../data/clientes'
+import { queryKeys, useVisitaDeHoy } from '../data/hooks'
 import type { PosicionVisita } from '../data/visitas'
 import { distanceMeters, formatDistance } from '../lib/geo'
+import { useUser } from '../providers/AuthProvider'
 import { useGeo, type GeoPosition } from '../providers/GeoProvider'
+import { Alert } from './ui/Alert'
 import { Button } from './ui/Button'
 import { cn } from './ui/cn'
 import { ConfirmDialog } from './ui/Dialog'
@@ -41,10 +45,25 @@ export interface VisitStart {
   position: PosicionVisita
 }
 
+const horaCorta = new Intl.DateTimeFormat('es-MX', { hour: 'numeric', minute: '2-digit' })
+
+/** Aviso de que el promotor ya registró hoy una visita a este cliente (para que no la repita por error). */
+export function AvisoVisitaHoy({ cliente, className }: { cliente: Cliente; className?: string }) {
+  const visitaHoy = useVisitaDeHoy(cliente)
+  if (visitaHoy === null) return null
+  return (
+    <Alert tone="warning" icon={<TriangleAlert />} className={className}>
+      {/* La hora ya termina en punto ("3:31 p.m."): va en medio de la frase. */}
+      Hoy a las {horaCorta.format(visitaHoy)} ya registraste una visita a este cliente.
+    </Alert>
+  )
+}
+
 /**
  * Botón "Iniciar visita". La visita se puede iniciar desde cualquier lugar, pero siempre con la ubicación:
  * se toma una lectura de GPS reciente, se mide la distancia al cliente y, si está lejos, se le dice al
  * promotor a cuánto está y se le pide confirmar. La ubicación y la distancia quedan guardadas en la visita.
+ * Si ya registró una visita a ese cliente hoy, antes se le pide confirmar que es otra visita.
  */
 export function StartVisitButton({
   cliente,
@@ -56,8 +75,18 @@ export function StartVisitButton({
   className?: string
 }) {
   const { getFresh } = useGeo()
+  const user = useUser()
+  const queryClient = useQueryClient()
   const [checking, setChecking] = useState(false)
   const [lejos, setLejos] = useState<VisitStart | null>(null)
+  const visitaHoy = useVisitaDeHoy(cliente)
+  const [repetida, setRepetida] = useState<{ inicio: VisitStart; hora: number } | null>(null)
+
+  const seguir = (inicio: VisitStart) => {
+    const distance = inicio.position.distance
+    if (distance !== null && distance > RADIO_VISITA_M) setLejos(inicio)
+    else onStart(inicio)
+  }
 
   const iniciar = async () => {
     setChecking(true)
@@ -69,8 +98,10 @@ export function StartVisitButton({
         answers: {},
         position: { lat: position.lat, lng: position.lng, accuracy: position.accuracy, distance },
       }
-      if (distance !== null && distance > RADIO_VISITA_M) setLejos(inicio)
-      else onStart(inicio)
+      // Lo más reciente que se sabe (la consulta pudo terminar mientras se obtenía la ubicación).
+      const hora = queryClient.getQueryData<number | null>(queryKeys.visitaHoy(user.id, cliente.key)) ?? null
+      if (hora !== null) setRepetida({ inicio, hora })
+      else seguir(inicio)
     } catch (error) {
       const code = (error as GeolocationPositionError | null)?.code
       toast.error(
@@ -92,8 +123,22 @@ export function StartVisitButton({
         loading={checking}
         icon={<Play className="size-5 fill-current" />}
       >
-        {checking ? 'Obteniendo tu ubicación…' : 'Iniciar visita'}
+        {checking ? 'Obteniendo tu ubicación…' : visitaHoy !== null ? 'Registrar otra visita' : 'Iniciar visita'}
       </Button>
+      <ConfirmDialog
+        open={repetida !== null}
+        title="Ya visitaste este cliente hoy"
+        confirmLabel="Registrar otra"
+        onCancel={() => setRepetida(null)}
+        onConfirm={() => {
+          const inicio = repetida?.inicio
+          setRepetida(null)
+          if (inicio) seguir({ ...inicio, startedAt: Date.now() })
+        }}
+      >
+        A las {repetida ? horaCorta.format(repetida.hora) : ''} registraste una visita a este cliente. Registra otra solo si
+        de verdad volviste a visitarlo.
+      </ConfirmDialog>
       <ConfirmDialog
         open={lejos !== null}
         title={`Estás a ${formatDistance(lejos?.position.distance)} del cliente`}

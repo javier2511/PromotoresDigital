@@ -7,6 +7,7 @@ import {
   VALOR_VISITADO_TEXTO,
 } from '../config/schema'
 import { serializeAnswer, isAnswered, type Answers, type Question } from '../lib/questions'
+import { isNetworkError } from '../lib/errors'
 import { ownerValueFor, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Id, type Row } from '../lib/supabase'
 import { normalize, toBoolean } from '../lib/text'
@@ -308,15 +309,19 @@ async function marcarVisitado(input: FinalizarVisitaInput): Promise<string | nul
  */
 export async function finalizarVisita(input: FinalizarVisitaInput): Promise<FinalizarVisitaResult> {
   let visitaId: Id | null
-  if (input.visitaPrevia) {
-    visitaId = input.visitaPrevia.id
+  // Si un intento anterior sí la guardó pero la respuesta no llegó (se cayó la señal), se reutiliza esa fila.
+  const previa = input.visitaPrevia ?? (await visitaDeEsteIntento(input))
+  if (previa) {
+    visitaId = previa.id
+    if (!input.visitaPrevia) input.onVisitaGuardada?.(previa)
   } else {
     visitaId = await insertVisita(input)
     if (input.ctx.tables.visitas.table && input.ctx.tables.visitas.columns.cliente) {
       input.onVisitaGuardada?.({ id: visitaId })
     }
   }
-  const respuestas = await insertRespuestas(input, visitaId)
+  // Lo mismo con las respuestas: si ya quedaron guardadas, no se vuelven a mandar.
+  const respuestas = (previa ? await respuestasGuardadas(input, visitaId) : 0) || (await insertRespuestas(input, visitaId))
   let warning: string | null = null
   try {
     const usaAsignaciones = Boolean(input.ctx.tables.asignaciones.table && input.ctx.tables.asignaciones.columns.estatus)
@@ -326,6 +331,54 @@ export async function finalizarVisita(input: FinalizarVisitaInput): Promise<Fina
       'La visita y las respuestas se guardaron, pero no se pudo marcar al cliente como visitado. Avísale a tu administrador.'
   }
   return { visitaId, respuestas, warning }
+}
+
+/** Error de una consulta de revisión: sin señal se detiene el guardado (se reintenta); cualquier otro se ignora. */
+function revisar(error: unknown): void {
+  if (error && isNetworkError(error)) throw error
+}
+
+/**
+ * Visita de este mismo intento que ya quedó guardada: mismo cliente, mismo promotor y la misma hora de inicio (la
+ * del borrador, que no cambia entre reintentos). null si no hay o no se puede saber.
+ */
+async function visitaDeEsteIntento(input: FinalizarVisitaInput): Promise<{ id: Id | null } | null> {
+  const { ctx, cliente, startedAt } = input
+  const v = ctx.tables.visitas
+  const c = v.columns
+  if (!v.table || !c.cliente || !c.inicio || !c.id) return null
+  let q = supabase.from(v.table).select(c.id).eq(c.cliente, cliente.id).eq(c.inicio, localIso(new Date(startedAt)))
+  if (c.usuario) q = whereUser(q, c.usuario, valoresUsuario(c.usuario, input)[0])
+  const { data, error } = await q.limit(1)
+  revisar(error)
+  const fila = (data as unknown as Row[] | null)?.[0]
+  return !error && fila ? { id: fila[c.id] as Id } : null
+}
+
+/** Cuántas respuestas de esa visita ya están guardadas (0 si ninguna o no se puede saber). */
+async function respuestasGuardadas(input: FinalizarVisitaInput, visitaId: Id | null): Promise<number> {
+  const r = input.ctx.tables.respuestas
+  if (!r.table || !r.columns.visita || visitaId === null) return 0
+  const { data, error } = await supabase.from(r.table).select(r.columns.visita).eq(r.columns.visita, visitaId)
+  revisar(error)
+  return !error && Array.isArray(data) ? data.length : 0
+}
+
+/** Hora (en milisegundos) de la última visita de hoy del usuario a ese cliente; null si no hay. */
+export async function visitaDeHoy(ctx: SchemaContext, user: User, cliente: Cliente): Promise<number | null> {
+  const v = ctx.tables.visitas
+  const c = v.columns
+  const columna = c.registro ?? c.inicio
+  if (!v.table || !c.cliente || !columna) return null
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  let q = supabase.from(v.table).select(columna).eq(c.cliente, cliente.id).gte(columna, localIso(hoy))
+  if (c.usuario) q = whereUser(q, c.usuario, ownerValueFor(c.usuario, ctx, user))
+  const { data, error } = await q.order(columna, { ascending: false }).limit(1)
+  if (error) return null
+  const valor = (data as unknown as Row[] | null)?.[0]?.[columna]
+  const ms = valor ? new Date(String(valor)).getTime() : NaN
+  return Number.isFinite(ms) ? ms : null
 }
 
 /** Borra una visita guardada a medias (al descartar). Devuelve true si se borró. */

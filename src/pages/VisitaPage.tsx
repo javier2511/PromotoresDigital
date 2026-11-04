@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { ErrorState } from '../components/ErrorState'
 import { TopBar } from '../components/PageHeader'
 import { QuestionInput } from '../components/QuestionField'
-import { StartVisitButton, useVisitGate, VisitGateCard } from '../components/VisitGate'
+import { AvisoVisitaHoy, StartVisitButton, useVisitGate, VisitGateCard } from '../components/VisitGate'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
@@ -131,6 +131,8 @@ export function VisitaPage() {
       )
       void queryClient.invalidateQueries({ queryKey: queryKeys.clientes(user.id) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.resultados(user.id) })
+      // Si el cliente sigue pendiente, al volver a él se avisa que ya tiene una visita hoy.
+      queryClient.setQueryData(queryKeys.visitaHoy(user.id, id), Date.now())
       const state: VisitaFinalizadaState = { respuestas: result.respuestas, warning: result.warning }
       navigate(`/clientes/${encodeURIComponent(id)}/visita/finalizada`, { replace: true, state })
     },
@@ -222,6 +224,7 @@ export function VisitaPage() {
       <>
         <TopBar title={cliente.nombre} subtitle="Iniciar visita" backTo={`/clientes/${encodeURIComponent(id)}`} />
         <div className="mx-auto max-w-2xl space-y-4 px-4 py-6">
+          <AvisoVisitaHoy cliente={cliente} />
           <VisitGateCard gate={gate} />
           <StartVisitButton cliente={cliente} onStart={(inicio) => setDraft({ ...inicio, updatedAt: Date.now() })} />
           <p className="text-center text-sm text-muted">Al iniciar se registra tu ubicación y la distancia al cliente.</p>
