@@ -224,10 +224,11 @@ contraseña). Opcional: pedirles que elijan su propia contraseña la primera vez
 (y antes el 10).
 
 **Borrar usuarios creados por error:** desde *Authentication → Users* Supabase marca "Database error deleting user"
-si el promotor ya tiene asignaciones (o jornadas): la base no deja borrarlo con filas ligadas.
+si algo en la base sigue apuntando al usuario (asignaciones, jornadas, otra tabla o un trigger).
 `supabase/16_borrar_usuarios.sql` primero lista a los usuarios de un dominio (p. ej. `@digitalk.com`) con sus
-asignaciones y visitas, y luego borra sus asignaciones, jornadas, su fila en promotores y la cuenta. Si alguno ya
-tiene visitas no borra nada y lo avisa, para no perder trabajo real.
+asignaciones y visitas, y luego borra a cada uno (con sus asignaciones y jornadas) y muestra el resultado por
+usuario: "Borrado" o el motivo exacto por el que no se pudo. A quien ya tenga visitas no lo borra, para no perder
+trabajo real.
 
 ### Líderes por región
 
