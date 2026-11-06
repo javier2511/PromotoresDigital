@@ -1,4 +1,4 @@
-import { ArrowLeft, ChartColumn, CircleCheck, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, MapPinned, ShieldCheck, User } from 'lucide-react'
+import { ArrowLeft, ChartColumn, CircleCheck, Eye, EyeOff, Lock, Mail, MapPinned, ShieldCheck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 import { LogoMark } from '../components/Logo'
@@ -10,7 +10,6 @@ import { APP_NAME } from '../config/app'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../providers/AuthProvider'
-import { useGeo } from '../providers/GeoProvider'
 
 const FEATURES = [
   { icon: MapPinned, title: 'Tus clientes en el mapa', text: 'Con tu ubicación en tiempo real y los más cercanos primero.' },
@@ -20,32 +19,27 @@ const FEATURES = [
 
 export function LoginPage() {
   const { user, loading: authLoading } = useAuth()
-  const { request: activarUbicacion } = useGeo()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
-  const [mode, setMode] = useState<'login' | 'registro' | 'restablecer'>('login')
-  const [nombre, setNombre] = useState('')
+  // Sin "Crear cuenta": las cuentas las crea el administrador (Equipo → Crear usuarios).
+  const [mode, setMode] = useState<'login' | 'restablecer'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [confirmacion, setConfirmacion] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pendienteConfirmar, setPendienteConfirmar] = useState(false)
   const [confirmarRestablecer, setConfirmarRestablecer] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
 
   if (!authLoading && user) return <Navigate to={from} replace />
 
-  const cambiarModo = (nuevo: 'login' | 'registro' | 'restablecer') => {
+  const cambiarModo = (nuevo: 'login' | 'restablecer') => {
     setMode(nuevo)
     setError(null)
     setAviso(null)
-    setPendienteConfirmar(false)
     setPassword('')
-    setConfirmacion('')
   }
 
   const onLogin = async (e: FormEvent) => {
@@ -78,35 +72,6 @@ export function LoginPage() {
     cambiarModo('login')
     // La contraseña temporal no se muestra en la app: el administrador se la comunica aparte.
     setAviso('Listo. Tu administrador te dará la contraseña temporal; entra con ella y elige una nueva.')
-  }
-
-  const onRegistro = async (e: FormEvent) => {
-    e.preventDefault()
-    if (!nombre.trim()) return setError('Escribe tu nombre.')
-    if (password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres.')
-    if (password !== confirmacion) return setError('Las contraseñas no coinciden.')
-    setError(null)
-    setLoading(true)
-    // Se pide el GPS al registrarse: su ubicación se guarda en la tabla de promotores.
-    activarUbicacion()
-    const { data, error: err } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        // registro_app: la app crea su fila en la tabla de usuarios al entrar por primera vez.
-        data: { full_name: nombre.trim(), registro_app: true },
-        emailRedirectTo: window.location.origin,
-      },
-    })
-    setLoading(false)
-    if (err) return setError(friendlyError(err))
-    if (data.session) return navigate('/', { replace: true })
-    // Con "Confirm email" activo, Supabase no inicia sesión hasta confirmar. Si el correo ya existía,
-    // responde sin identidades.
-    if (data.user && data.user.identities?.length === 0) {
-      return setError('Ya existe una cuenta con ese correo. Inicia sesión.')
-    }
-    setPendienteConfirmar(true)
   }
 
   const campoCorreo = (
@@ -206,18 +171,9 @@ export function LoginPage() {
               <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email || !password}>
                 Ingresar
               </Button>
-              <p className="text-center text-sm text-muted">
-                ¿No tienes cuenta?{' '}
-                <button
-                  type="button"
-                  onClick={() => cambiarModo('registro')}
-                  className="font-semibold text-brand-600 hover:underline dark:text-brand-300"
-                >
-                  Crear cuenta
-                </button>
-              </p>
+              <p className="text-center text-sm text-muted">¿No tienes cuenta? Pídela a tu administrador.</p>
             </form>
-          ) : mode === 'restablecer' ? (
+          ) : (
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -244,75 +200,6 @@ export function LoginPage() {
               {error && <Alert>{error}</Alert>}
               <Button type="submit" size="lg" className="w-full" loading={loading} disabled={!email}>
                 Restablecer contraseña
-              </Button>
-            </form>
-          ) : pendienteConfirmar ? (
-            <div className="flex flex-col items-center gap-3 py-4 text-center">
-              <div className="grid size-14 animate-pop place-items-center rounded-2xl bg-emerald-500/12 text-emerald-600">
-                <MailCheck className="size-7" />
-              </div>
-              <p className="text-lg font-semibold">Confirma tu correo</p>
-              <p className="text-sm text-muted">
-                Te enviamos un enlace a <strong className="text-fg">{email}</strong>. Ábrelo para activar tu cuenta y
-                después inicia sesión.
-              </p>
-              <Button variant="secondary" className="mt-2" onClick={() => cambiarModo('login')}>
-                Ir a iniciar sesión
-              </Button>
-            </div>
-          ) : (
-            <form onSubmit={onRegistro} className="space-y-4" noValidate>
-              <button
-                type="button"
-                onClick={() => cambiarModo('login')}
-                className="-ml-1 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-fg"
-              >
-                <ArrowLeft className="size-4" /> Volver
-              </button>
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight">Crea tu cuenta</h2>
-                <p className="mt-1 text-sm text-muted">Tu administrador te asignará clientes después de registrarte.</p>
-              </div>
-              <TextField
-                label="Nombre completo"
-                autoComplete="name"
-                placeholder="Nombre y apellido"
-                icon={<User />}
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                required
-              />
-              {campoCorreo}
-              <TextField
-                label="Contraseña"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                placeholder="Mínimo 6 caracteres"
-                icon={<Lock />}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                trailing={verContrasena}
-              />
-              <TextField
-                label="Confirma la contraseña"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="new-password"
-                placeholder="Repite la contraseña"
-                icon={<KeyRound />}
-                value={confirmacion}
-                onChange={(e) => setConfirmacion(e.target.value)}
-                required
-              />
-              {error && <Alert>{error}</Alert>}
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full"
-                loading={loading}
-                disabled={!nombre || !email || !password || !confirmacion}
-              >
-                Crear cuenta
               </Button>
             </form>
           )}

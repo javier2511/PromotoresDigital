@@ -10,7 +10,7 @@ Reemplaza la versión de FlutterFlow **usando la misma base de datos de Supabase
 
 | Pantalla | Detalle |
 | --- | --- |
-| **Inicio de sesión** | Correo y contraseña de Supabase Auth. **Crear cuenta** desde la misma pantalla (nombre, correo y contraseña); la cuenta nueva aparece en tu tabla de usuarios y tú le asignas clientes. |
+| **Inicio de sesión** | Correo y contraseña de Supabase Auth. No hay "Crear cuenta": las cuentas las crea un administrador (**Equipo → Crear usuarios**). |
 | **Clientes** | Avance (visitados / asignados), **jornada de hoy** (iniciar / terminar), búsqueda, filtros Pendientes · Visitados · Todos, **filtro por día de visita** (columna `dia_visita`), orden por cercanía, distancia a cada cliente y "más cercano" destacado. Al finalizar una visita el cliente sale de Pendientes. |
 | **Mapa** | Pines por estado (rojo pendiente, verde visitado), agrupación cuando hay muchos, punto azul con círculo de precisión y orientación, botón "Mi ubicación", tarjeta del cliente con *Ver detalle* y *Cómo llegar*. En computadora, lista lateral + mapa. |
 | **Ficha del cliente** | Mini mapa con la distancia, botones a Google Maps, Waze y llamada, y la información que tenías en FlutterFlow: saldo de puntos, status autogestión, Premia, cuponera, canal y canjes / promos / lotería / retos de los últimos 3 meses. |
@@ -60,20 +60,17 @@ Cada vez que hagas *push* a GitHub, Vercel publica la nueva versión sola.
 
 El archivo `public/_redirects` ya está listo para Cloudflare Pages (y Netlify); `vercel.json` para Vercel.
 
-### Registro de promotores ("Crear cuenta")
+### Cuentas de promotores
 
-En Supabase → **Authentication → Sign In / Providers**:
+La pantalla de inicio no tiene "Crear cuenta": los promotores no pueden registrarse solos. Las cuentas las crea un
+administrador en **Equipo → Crear usuarios** (o en Supabase → *Authentication → Users → Add user*). Para que
+tampoco se pueda crear una cuenta por fuera de la app, en Supabase → **Authentication → Sign In / Providers**
+desactiva **Allow new users to sign up**: no afecta a Crear usuarios, al restablecimiento de contraseña ni a
+quienes ya tienen cuenta.
 
-- **Allow new users to sign up** debe estar activado (si no, la app avisa que el registro de usuarios está
-  desactivado).
-- **Confirm email**: si está activado, el promotor recibe un correo y debe abrir el enlace antes de poder
-  entrar. El correo que manda Supabase sin configurar SMTP propio tiene un límite de pocos correos por hora,
-  así que para un equipo de promotores conviene **desactivarlo** (entran en cuanto crean su cuenta) o
-  configurar tu propio SMTP en *Authentication → Emails*.
-
-Al entrar por primera vez, la app agrega al promotor en tu tabla de usuarios (`usuarios`/`perfiles`…) con su
-id, correo y nombre, como hacía el registro de FlutterFlow (si tus políticas RLS lo permiten). Después tú le
-asignas clientes desde Supabase. **¿Olvidaste tu contraseña?** (requiere ejecutar `supabase/08_restablecer_contrasena.sql`): el promotor escribe
+Si una cuenta no tiene fila en tu tabla de usuarios (por ejemplo, creada en *Add user*), al entrar por primera
+vez la app la agrega (`promotores`/`usuarios`…) con su id, correo y nombre (si tus políticas RLS lo permiten).
+Después tú le asignas clientes desde Supabase. **¿Olvidaste tu contraseña?** (requiere ejecutar `supabase/08_restablecer_contrasena.sql`): el promotor escribe
 su correo, confirma, y su contraseña pasa a ser la temporal definida en ese SQL. La app no la muestra: tú se la
 comunicas por otro medio. Al entrar con ella la app no lo deja seguir hasta que elija una nueva. Solo funciona con promotores activos (no con
 administradores), una vez cada 10 minutos por cuenta, y cada restablecimiento queda en la tabla
