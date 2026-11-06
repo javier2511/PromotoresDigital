@@ -223,6 +223,12 @@ contraseña). Opcional: pedirles que elijan su propia contraseña la primera vez
 (los admins se siguen poniendo con el `update` de arriba). Requiere ejecutar una vez `supabase/13_crear_usuarios.sql`
 (y antes el 10).
 
+**Borrar usuarios creados por error:** desde *Authentication → Users* Supabase marca "Database error deleting user"
+si el promotor ya tiene asignaciones (o jornadas): la base no deja borrarlo con filas ligadas.
+`supabase/16_borrar_usuarios.sql` primero lista a los usuarios de un dominio (p. ej. `@digitalk.com`) con sus
+asignaciones y visitas, y luego borra sus asignaciones, jornadas, su fila en promotores y la cuenta. Si alguno ya
+tiene visitas no borra nada y lo avisa, para no perder trabajo real.
+
 ### Líderes por región
 
 Además de `admin`, en la columna `rol` de **promotores** puedes poner `lider` (o `líder`). Ejecuta una vez
