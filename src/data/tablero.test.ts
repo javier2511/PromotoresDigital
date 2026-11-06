@@ -122,7 +122,9 @@ describe('indicadores', () => {
     expect(ind.diasPromotor).toBe(4)
     expect(ind.promotoresPorDia).toBeCloseTo(4 / 3)
     expect(ind.diarias).toBeCloseTo(7 / 3 / (4 / 3))
-    expect(ind.diariasConCompra).toBeCloseTo(3 / 4)
+    // Con compra: A el 19 (visitas 1 y 3) y B el 20 (visita 5): 2 días-promotor con compra.
+    expect(ind.diasPromotorConCompra).toBe(2)
+    expect(ind.diariasConCompra).toBeCloseTo(3 / 2)
   })
 
   it('por figura: cada día cuenta solo a los promotores que sí trabajaron ese día', () => {
@@ -149,6 +151,37 @@ describe('indicadores', () => {
     expect(total.promotoresPorDia).toBe(1)
     expect(total.diarias).toBe(5) // 10 visitas / 2 días / 1 promotor por día (no / 2 promotores)
     expect(total.diariasConCompra).toBe(1)
+  })
+
+  it('con compra: los días que el promotor visitó pero no vendió no cuentan', () => {
+    const visita = (key: string, promotor: string, dia: string, conCompra: boolean): VisitaTablero => ({
+      key,
+      promotor,
+      cliente: null,
+      nombreCliente: null,
+      momento: null,
+      dia,
+      hora: null,
+      conCompra,
+      inicio: null,
+      fin: null,
+      duracion: null,
+      distancia: null,
+    })
+    // A: lunes 3 visitas (2 con compra) y martes 2 sin compra; B: lunes 2 visitas (1 con compra).
+    const ind = calcularIndicadores([
+      visita('1', 'A', '2026-10-19', true),
+      visita('2', 'A', '2026-10-19', true),
+      visita('3', 'A', '2026-10-19', false),
+      visita('4', 'A', '2026-10-20', false),
+      visita('5', 'A', '2026-10-20', false),
+      visita('6', 'B', '2026-10-19', true),
+      visita('7', 'B', '2026-10-19', false),
+    ])
+    expect(ind.diasPromotor).toBe(3) // A lunes, A martes, B lunes
+    expect(ind.diarias).toBeCloseTo(7 / 3)
+    expect(ind.diasPromotorConCompra).toBe(2) // el martes de A no tuvo compra
+    expect(ind.diariasConCompra).toBe(1.5) // 3 compras ÷ 2 (no ÷ 3)
   })
 
   it('tiempos promedio', () => {

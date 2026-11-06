@@ -76,7 +76,7 @@ const MAX_VISITAS_CUESTIONARIO = 200
 
 function Indicadores8({ ind }: { ind: Indicadores }) {
   // Visitas ÷ días-promotor: cada promotor cuenta solo los días que sí hizo visitas (quien faltó no cuenta).
-  const diasPromotor = `${formatoEntero(ind.diasPromotor)} ${ind.diasPromotor === 1 ? 'día-promotor' : 'días-promotor'}`
+  const diasPromotor = (n: number) => `${formatoEntero(n)} ${n === 1 ? 'día-promotor' : 'días-promotor'}`
   const pctCompra = porcentaje(ind.conCompra, ind.visitas)
   const promedioDe = (n: number) => `Promedio de ${plural(n, 'visita')}`
   return (
@@ -97,14 +97,14 @@ function Indicadores8({ ind }: { ind: Indicadores }) {
         icono={CalendarDays}
         titulo="Visitas Diarias x Figura"
         valor={formatoDecimal(ind.diarias)}
-        ayuda={`${formatoEntero(ind.visitas)} visitas ÷ ${diasPromotor} (cada promotor cuenta solo los días que sí hizo visitas)`}
+        ayuda={`${formatoEntero(ind.visitas)} visitas ÷ ${diasPromotor(ind.diasPromotor)} (cada promotor cuenta solo los días que sí hizo visitas)`}
       />
       <TarjetaKpi
         icono={ShoppingCart}
         insignia={Check}
         titulo="Visitas Diarias x Figura con compra"
         valor={formatoDecimal(ind.diariasConCompra)}
-        ayuda={`${formatoEntero(ind.conCompra)} visitas con compra ÷ ${diasPromotor} (los días que cada promotor sí hizo visitas, con o sin compra)`}
+        ayuda={`${formatoEntero(ind.conCompra)} visitas con compra ÷ ${diasPromotor(ind.diasPromotorConCompra)} con compra (cada promotor cuenta solo los días en que tuvo al menos una compra)`}
       />
       <TarjetaKpi
         icono={Clock}

@@ -268,7 +268,7 @@ esa semana) o un **rango** de fechas (desde–hasta: la gráfica muestra justo e
 | Visitas realizadas | Visitas distintas (`id_visita`); si una visita está cargada varias veces cuenta la fila más reciente. |
 | Visitas con compra autogestionada | Visitas con `digital_post_visita` (o `digital_post_venta`) = true; en el encabezado, su % de las visitas realizadas. |
 | Visitas diarias por figura | Visitas ÷ días ÷ promotores que **sí trabajaron** esos días (en promedio por día): cada día cuenta solo a los promotores que visitaron ese día, así que en Total o Mes no baja por quien no trabajó todos los días. Es lo mismo que visitas ÷ días-promotor. |
-| Visitas diarias por figura con compra | Lo mismo, solo con las visitas con compra. |
+| Visitas diarias por figura con compra | Visitas con compra ÷ días-promotor **con compra**: cada promotor cuenta solo los días en que tuvo al menos una compra (un día que visitó pero no vendió no cuenta). |
 | Tiempo x Visita (min) | Promedio de la columna de minutos de visita (p. ej. `tiempo_visita`). |
 | Tiempo x Visita con compra (min) | Lo mismo, solo con las visitas con compra. |
 | Tiempo entre visitas (min) | Promedio de la columna de minutos entre una visita y la siguiente (p. ej. `tiempo_nueva_visita`). |

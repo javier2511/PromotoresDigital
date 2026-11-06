@@ -263,11 +263,13 @@ export interface Indicadores {
   promotores: number
   /** Días trabajados sumando los de cada promotor (cada promotor cuenta solo los días que sí visitó). */
   diasPromotor: number
+  /** Días-promotor con al menos una visita con compra (cada promotor cuenta solo los días en que vendió). */
+  diasPromotorConCompra: number
   /** Promotores que visitaron, en promedio, cada día con visitas (diasPromotor / dias). */
   promotoresPorDia: number | null
   /** Visitas diarias por figura: visitas / días / promotores que trabajaron esos días (= visitas / diasPromotor). */
   diarias: number | null
-  /** Lo mismo con las visitas con compra. */
+  /** Visitas con compra / días-promotor con al menos una compra (los días sin compra no cuentan). */
   diariasConCompra: number | null
   /** Minutos promedio de visita. */
   tiempoVisita: Promedio
@@ -313,8 +315,10 @@ export function calcularIndicadores(visitas: VisitaTablero[], radio = RADIO_VISI
   // Si ninguna visita dice quién la hizo, cuenta como un promotor.
   const promotores = conocidos || (visitas.length ? 1 : 0)
   // Cada día cuenta solo a los promotores que sí visitaron ese día (no a todos los del periodo).
-  const diasPromotor = new Set(visitas.filter((v) => v.dia).map((v) => `${v.promotor ?? ''}|${v.dia}`)).size
-  const porFigura = (n: number) => (diasPromotor ? n / diasPromotor : null)
+  const diasDe = (lista: VisitaTablero[]) => new Set(lista.filter((v) => v.dia).map((v) => `${v.promotor ?? ''}|${v.dia}`)).size
+  const diasPromotor = diasDe(visitas)
+  // Para las compras, solo los días en que cada promotor tuvo al menos una compra.
+  const diasPromotorConCompra = diasDe(conCompra)
   const duraciones = (lista: VisitaTablero[]) => lista.map((v) => v.duracion).filter((d): d is number => d !== null)
   const distancias = visitas.map((v) => v.distancia).filter((d): d is number => d !== null)
   const columnaNueva = visitas.some((v) => v.minutosNueva !== undefined)
@@ -327,9 +331,10 @@ export function calcularIndicadores(visitas: VisitaTablero[], radio = RADIO_VISI
     dias,
     promotores,
     diasPromotor,
+    diasPromotorConCompra,
     promotoresPorDia: dias ? diasPromotor / dias : null,
-    diarias: porFigura(visitas.length),
-    diariasConCompra: porFigura(conCompra.length),
+    diarias: diasPromotor ? visitas.length / diasPromotor : null,
+    diariasConCompra: diasPromotorConCompra ? conCompra.length / diasPromotorConCompra : null,
     tiempoVisita: promedio(duraciones(visitas)),
     tiempoVisitaConCompra: promedio(duraciones(conCompra)),
     tiempoNuevaVisita: promedio(nuevas),
