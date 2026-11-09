@@ -1,22 +1,22 @@
 import type { User } from '@supabase/supabase-js'
 import { isNetworkError } from '../lib/errors'
+import { isoLocal, type Rango } from '../lib/periodos'
 import { ownerCandidates, type SchemaContext } from '../lib/schema-resolver'
 import { supabase, type Row } from '../lib/supabase'
 import { toBoolean } from '../lib/text'
 import { idsDe, porGrupos, type Alcance } from './alcance'
 import { fetchAll } from './clientes'
+import { instante } from './tablero'
 
 export interface Resultados {
   table: string | null
   rows: Row[]
   /** Cómo se filtraron las filas del usuario. */
   filtro: 'usuario' | 'clientes' | 'ninguno'
-  /** Había más de MAX_RESULTADOS: solo llegan las más recientes. */
-  limitado?: boolean
 }
 
+/** Tarjetas que se dibujan como máximo (los resúmenes cuentan todas las filas del periodo). */
 export const MAX_RESULTADOS = 2000
-const MAX_ROWS = MAX_RESULTADOS
 
 type Consulta = ReturnType<ReturnType<typeof supabase.from>['select']>
 
@@ -48,7 +48,7 @@ export async function fetchResultados(
         if (isNetworkError(error)) throw error
         return null // p. ej. la columna es numérica y se comparó con un uuid: se prueba la siguiente forma
       })
-      if (rows && rows.length > 0) return { table, rows: rows.slice(0, MAX_ROWS), filtro: 'usuario' }
+      if (rows && rows.length > 0) return { table, rows, filtro: 'usuario' }
     }
     return { table, rows: [], filtro: 'usuario' }
   }
@@ -57,15 +57,16 @@ export async function fetchResultados(
   const clienteCol = t.columns.cliente
   if (clienteCol) {
     const mine = rows.filter((r) => clienteKeys.has(String(r[clienteCol])))
-    return { table, rows: mine.slice(0, MAX_ROWS), filtro: 'clientes' }
+    return { table, rows: mine, filtro: 'clientes' }
   }
   // Sin columna de usuario ni de cliente: se muestra lo que las políticas RLS permitan ver.
-  return { table, rows: rows.slice(0, MAX_ROWS), filtro: 'ninguno' }
+  return { table, rows, filtro: 'ninguno' }
 }
 
 /**
  * Resultados del equipo: de todos los promotores (admin) o de los de su región (líder), los más recientes primero.
- * Un líder solo pide las filas de sus promotores; la base también lo limita (supabase/14 y 15).
+ * Llegan todas las filas (el periodo se filtra en la pantalla). Un líder solo pide las filas de sus promotores; la
+ * base también lo limita (supabase/14 y 15).
  */
 export async function fetchResultadosEquipo(ctx: SchemaContext, alcance: Alcance): Promise<Resultados> {
   const t = ctx.tables.resultados
@@ -85,7 +86,33 @@ export async function fetchResultadosEquipo(ctx: SchemaContext, alcance: Alcance
   if (fecha && ids) {
     rows.sort((a, b) => String(b[fecha] ?? '').localeCompare(String(a[fecha] ?? '')))
   }
-  return { table, rows: rows.slice(0, MAX_ROWS), filtro: ids ? 'usuario' : 'ninguno', limitado: rows.length > MAX_ROWS }
+  return { table, rows, filtro: ids ? 'usuario' : 'ninguno' }
+}
+
+/** Día local ("YYYY-MM-DD") de una fila según su columna de fecha (p. ej. fecha_visita); null si no tiene. */
+export function diaResultado(row: Row, fecha: string | undefined): string | null {
+  if (!fecha) return null
+  const t = instante(row[fecha])
+  return t === null ? null : isoLocal(new Date(t))
+}
+
+/** Filas del periodo: en Total, todas (también las que no tienen fecha); si no, las de los días del rango. */
+export function resultadosDelPeriodo(rows: Row[], fecha: string | undefined, rango: Rango): Row[] {
+  if (rango.periodo === 'total' || !fecha) return rows
+  return rows.filter((r) => {
+    const dia = diaResultado(r, fecha)
+    return dia !== null && dia >= rango.desde && dia < rango.hasta
+  })
+}
+
+/** Primer día con resultados (para "Desde el …" en Total y para empezar el Rango). */
+export function primerDiaResultados(rows: Row[], fecha: string | undefined): string | null {
+  let min: string | null = null
+  for (const r of rows) {
+    const dia = diaResultado(r, fecha)
+    if (dia && (!min || dia < min)) min = dia
+  }
+  return min
 }
 
 export interface Resumen {

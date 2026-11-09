@@ -3,14 +3,24 @@ import { ChartColumn, MapPin, RefreshCw, Search, Smartphone, Store, X } from 'lu
 import { useMemo, useState, type ReactNode } from 'react'
 import { ErrorState } from '../components/ErrorState'
 import { PageTitle } from '../components/PageHeader'
+import { SelectorPeriodo } from '../components/tablero/Filtros'
+import { usePeriodo } from '../components/tablero/usePeriodo'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
 import { FaltaSqlRegiones, fetchAlcance, idsDe, SinRegion } from '../data/alcance'
 import { useClientes, useResultados, useSchema } from '../data/hooks'
-import { fetchResultadosEquipo, MAX_RESULTADOS, resumirResultados, type Resumen } from '../data/resultados'
+import {
+  fetchResultadosEquipo,
+  MAX_RESULTADOS,
+  primerDiaResultados,
+  resultadosDelPeriodo,
+  resumirResultados,
+  type Resumen,
+} from '../data/resultados'
 import { formatoEntero } from '../lib/formato'
+import { hoyLocal } from '../lib/periodos'
 import { veEquipo, type SchemaContext } from '../lib/schema-resolver'
 import type { Row } from '../lib/supabase'
 import { ETIQUETA_INDICADOR } from '../config/schema'
@@ -184,6 +194,10 @@ function ListaResultados({ tarjetas, vacio, nota }: { tarjetas: Tarjeta[]; vacio
   )
 }
 
+/** Aviso cuando hay más tarjetas de las que se dibujan (el resumen sí cuenta todas). */
+const notaLimite = (total: number) =>
+  total > MAX_RESULTADOS ? ` · los ${formatoEntero(MAX_RESULTADOS)} más recientes de ${formatoEntero(total)}` : undefined
+
 const esqueleto = (
   <div className="mt-5 grid gap-3 md:grid-cols-2">
     {Array.from({ length: 4 }, (_, i) => (
@@ -197,12 +211,19 @@ function ResultadosPropios() {
   const { clientes, ctx, error: clientesError } = useClientes()
   const clienteKeys = useMemo(() => (clientes ? new Set(clientes.map((c) => c.key)) : undefined), [clientes])
   const { resultados, isPending, isFetching, error, refetch } = useResultados(clienteKeys)
+  // Periodo por la fecha de cada resultado (fecha_visita): Total, Mes, Semana o Rango.
+  const hoy = hoyLocal()
+  const periodo = usePeriodo(hoy)
+  const colFecha = ctx?.tables.resultados.columns.fecha
+  const todas = resultados?.rows
+  const primerDia = useMemo(() => primerDiaResultados(todas ?? [], colFecha), [todas, colFecha])
+  const filas = useMemo(() => resultadosDelPeriodo(todas ?? [], colFecha, periodo.rango), [todas, colFecha, periodo.rango])
 
   const tarjetas = useMemo<Tarjeta[]>(() => {
-    if (!resultados || !ctx) return []
+    if (!ctx) return []
     const cols = ctx.tables.resultados.columns
     const nombres = new Map(clientes?.map((c) => [c.key, c.nombre]))
-    return resultados.rows.map((row: Row, i) => {
+    return filas.slice(0, MAX_RESULTADOS).map((row: Row, i) => {
       const cliente = cols.cliente ? nombres.get(String(row[cols.cliente])) : undefined
       const titulo =
         cliente ??
@@ -211,13 +232,13 @@ function ResultadosPropios() {
       const usadas = [cols.usuario, cliente ? cols.cliente : undefined, cols.titulo, cols.fecha]
       return tarjeta(row, String(row.id ?? i), titulo, usadas, cols.fecha)
     })
-  }, [resultados, ctx, clientes])
+  }, [filas, ctx, clientes])
 
   const resumen = useMemo(() => {
-    if (!resultados || !ctx || resultados.rows.length === 0) return null
+    if (!ctx || filas.length === 0) return null
     const cols = ctx.tables.resultados.columns
-    return resumirResultados(resultados.rows, cols.cliente, cols.indicador)
-  }, [resultados, ctx])
+    return resumirResultados(filas, cols.cliente, cols.indicador)
+  }, [filas, ctx])
 
   const anyError = clientesError ?? error
 
@@ -228,6 +249,12 @@ function ResultadosPropios() {
         subtitle="Cargados por tu administrador"
         actions={<BotonActualizar onClick={() => refetch()} girando={isFetching} />}
       />
+
+      {colFecha && !anyError && (todas?.length ?? 0) > 0 && (
+        <div className="mt-5">
+          <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todos los resultados" />
+        </div>
+      )}
 
       {resumen && !anyError && <ResumenCard resumen={resumen} />}
 
@@ -244,7 +271,13 @@ function ResultadosPropios() {
           </EmptyState>
         </div>
       ) : (
-        <ListaResultados tarjetas={tarjetas} vacio="Cuando tu administrador cargue tus resultados aparecerán aquí." />
+        <ListaResultados
+          tarjetas={tarjetas}
+          vacio={
+            todas?.length ? 'No hay resultados en este periodo.' : 'Cuando tu administrador cargue tus resultados aparecerán aquí.'
+          }
+          nota={notaLimite(filas.length)}
+        />
       )}
     </div>
   )
@@ -269,22 +302,27 @@ function ResultadosEquipo({ ctx }: { ctx: SchemaContext }) {
   const cols = ctx.tables.resultados.columns
   const filas = query.data?.rows
   const nombres = useMemo(() => new Map(alcance?.promotores.map((p) => [p.id, p.nombre])), [alcance])
+  // Periodo por la fecha de cada resultado (fecha_visita): Total, Mes, Semana o Rango.
+  const hoy = hoyLocal()
+  const periodo = usePeriodo(hoy)
+  const primerDia = useMemo(() => primerDiaResultados(filas ?? [], cols.fecha), [filas, cols.fecha])
+  const delPeriodo = useMemo(() => resultadosDelPeriodo(filas ?? [], cols.fecha, periodo.rango), [filas, cols.fecha, periodo.rango])
 
-  // Filtro: los promotores que tienen resultados, por nombre.
+  // Filtro: los promotores que tienen resultados (con cuántos en el periodo), por nombre. Se listan aunque en el
+  // periodo no tengan, para no perder al elegido al cambiar de periodo.
   const opciones = useMemo(() => {
     const col = cols.usuario
     if (!filas || !col) return []
     const cuenta = new Map<string, number>()
-    for (const r of filas) {
-      if (!esVacio(r[col])) cuenta.set(String(r[col]), (cuenta.get(String(r[col])) ?? 0) + 1)
-    }
+    for (const r of filas) if (!esVacio(r[col])) cuenta.set(String(r[col]), 0)
+    for (const r of delPeriodo) if (!esVacio(r[col])) cuenta.set(String(r[col]), (cuenta.get(String(r[col])) ?? 0) + 1)
     return [...cuenta]
       .map(([id, n]) => ({ id, n, nombre: nombres.get(id) ?? id }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [filas, cols.usuario, nombres])
+  }, [filas, delPeriodo, cols.usuario, nombres])
   const elegidas = useMemo(
-    () => (filas && promotor && cols.usuario ? filas.filter((r) => String(r[cols.usuario!]) === promotor) : (filas ?? [])),
-    [filas, promotor, cols.usuario],
+    () => (promotor && cols.usuario ? delPeriodo.filter((r) => String(r[cols.usuario!]) === promotor) : delPeriodo),
+    [delPeriodo, promotor, cols.usuario],
   )
   const resumen = useMemo(
     () => (elegidas.length ? resumirResultados(elegidas, cols.cliente, cols.indicador) : null),
@@ -292,7 +330,7 @@ function ResultadosEquipo({ ctx }: { ctx: SchemaContext }) {
   )
   const tarjetas = useMemo<Tarjeta[]>(
     () =>
-      elegidas.map((row, i) => {
+      elegidas.slice(0, MAX_RESULTADOS).map((row, i) => {
         const nombreCliente = cols.nombreCliente && !esVacio(row[cols.nombreCliente]) ? String(row[cols.nombreCliente]) : null
         const idCliente = cols.cliente && !esVacio(row[cols.cliente]) ? String(row[cols.cliente]) : null
         const titulo = nombreCliente ?? (idCliente ? `Cliente ${idCliente}` : `Registro ${i + 1}`)
@@ -337,26 +375,39 @@ function ResultadosEquipo({ ctx }: { ctx: SchemaContext }) {
         </div>
       ) : (
         <>
-          {opciones.length > 1 && (
-            <select
-              value={promotor}
-              onChange={(e) => setPromotor(e.target.value)}
-              aria-label="Promotor"
-              className="mt-5 h-11 w-full rounded-xl border border-line bg-card px-3 text-[16px] text-fg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 sm:w-80"
-            >
-              <option value="">Todos los promotores ({formatoEntero(filas?.length ?? 0)})</option>
-              {opciones.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.nombre} ({formatoEntero(o.n)})
-                </option>
-              ))}
-            </select>
+          {((cols.fecha && (filas?.length ?? 0) > 0) || opciones.length > 1) && (
+            <div className="mt-5 space-y-3">
+              {cols.fecha && (filas?.length ?? 0) > 0 && (
+                <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todos los resultados" />
+              )}
+              {opciones.length > 1 && (
+                <select
+                  value={promotor}
+                  onChange={(e) => setPromotor(e.target.value)}
+                  aria-label="Promotor"
+                  className="h-11 w-full rounded-xl border border-line bg-card px-3 text-[16px] text-fg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 sm:w-80"
+                >
+                  <option value="">Todos los promotores ({formatoEntero(delPeriodo.length)})</option>
+                  {opciones.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.nombre} ({formatoEntero(o.n)})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           )}
           {resumen && <ResumenCard resumen={resumen} />}
           <ListaResultados
             tarjetas={tarjetas}
-            vacio={region ? 'Los promotores de tu región aún no tienen resultados.' : 'Aún no hay resultados cargados.'}
-            nota={query.data.limitado ? ` · los ${formatoEntero(MAX_RESULTADOS)} más recientes` : undefined}
+            vacio={
+              filas?.length
+                ? 'No hay resultados en este periodo.'
+                : region
+                  ? 'Los promotores de tu región aún no tienen resultados.'
+                  : 'Aún no hay resultados cargados.'
+            }
+            nota={notaLimite(elegidas.length)}
           />
         </>
       )}
