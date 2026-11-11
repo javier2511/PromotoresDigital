@@ -220,6 +220,14 @@ contraseña). Opcional: pedirles que elijan su propia contraseña la primera vez
 (los admins se siguen poniendo con el `update` de arriba). Requiere ejecutar una vez `supabase/13_crear_usuarios.sql`
 (y antes el 10).
 
+**Desactivar usuarios:** ejecuta una vez `supabase/17_usuarios_inactivos.sql`. Desde entonces, al poner
+`activo = false` en **promotores** (Table Editor), ese usuario ya no puede entrar a la app ni guardar, cambiar o borrar
+nada, y **no se borra ninguno de sus datos**. Supabase bloquea su cuenta y cierra sus sesiones; si tenía la app
+abierta, todo lo que intente guardar se rechaza y la app lo saca al volver a abrirla (a más tardar en una hora). Al
+entrar ve "Tu usuario está desactivado. Habla con tu administrador." Para reactivarlo pon `activo = true`: entra con su
+misma contraseña. Los administradores pueden seguir editando las filas de un usuario desactivado. Aun sin el SQL, la
+app no deja entrar a quien tenga `activo = false`, pero solo el SQL lo bloquea también en Supabase.
+
 **Borrar usuarios creados por error:** desde *Authentication → Users* Supabase marca "Database error deleting user"
 si algo en la base sigue apuntando al usuario (asignaciones, jornadas, otra tabla o un trigger).
 `supabase/16_borrar_usuarios.sql` primero lista a los usuarios de un dominio (p. ej. `@digitalk.com`) con sus

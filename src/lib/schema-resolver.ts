@@ -2,7 +2,7 @@ import type { PostgrestError, User } from '@supabase/supabase-js'
 import { ROLES_ADMIN, ROLES_LIDER, schema, type Schema, type TableSpec } from '../config/schema'
 import { isNetworkError } from './errors'
 import { supabase, type Row } from './supabase'
-import { normalize } from './text'
+import { normalize, toBoolean } from './text'
 
 export type TableKey = keyof Schema
 type FieldsOf<K extends TableKey> = Schema[K] extends TableSpec<infer F> ? F : never
@@ -48,6 +48,8 @@ export interface Perfil {
   rol?: string | null
   /** Columna region (supabase/14_lideres_por_region.sql). */
   region?: string | null
+  /** Columna activo: false = usuario desactivado (no entra a la app). null si la tabla no la tiene. */
+  activo?: boolean | null
 }
 
 export interface SchemaContext {
@@ -214,6 +216,7 @@ async function resolvePerfil(t: ResolvedTable<FieldsOf<'perfiles'>>, user: User)
         ubicacionTexto: ubicacion && !vacio(ubicacion) ? String(row[ubicacion]) : null,
         rol: t.columns.rol && !vacio(t.columns.rol) ? String(row[t.columns.rol]) : null,
         region: region && !vacio(region) ? String(row[region]).trim() : null,
+        activo: t.columns.activo ? toBoolean(row[t.columns.activo]) : null,
       }
     }
   }

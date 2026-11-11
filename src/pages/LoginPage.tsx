@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/Dialog'
 import { TextField } from '../components/ui/TextField'
 import { APP_NAME } from '../config/app'
+import { hayAvisoCuentaInactiva, MENSAJE_CUENTA_INACTIVA, quitarAvisoCuentaInactiva } from '../lib/cuenta-inactiva'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../providers/AuthProvider'
@@ -29,7 +30,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Si se cerró la sesión porque el usuario está desactivado, se dice aquí.
+  const [error, setError] = useState<string | null>(() => (hayAvisoCuentaInactiva() ? MENSAJE_CUENTA_INACTIVA : null))
   const [confirmarRestablecer, setConfirmarRestablecer] = useState(false)
   const [aviso, setAviso] = useState<string | null>(null)
 
@@ -45,6 +47,7 @@ export function LoginPage() {
   const onLogin = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    quitarAvisoCuentaInactiva()
     setLoading(true)
     const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
     setLoading(false)

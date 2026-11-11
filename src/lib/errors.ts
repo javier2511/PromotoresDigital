@@ -1,3 +1,5 @@
+import { MENSAJE_CUENTA_INACTIVA } from './cuenta-inactiva'
+
 interface ErrorLike {
   message?: string
   code?: string
@@ -17,6 +19,8 @@ export function friendlyError(error: unknown): string {
   const msg = e.message ?? String(error)
   if (isNetworkError(e)) return 'Sin conexión a internet. Revisa tu señal e inténtalo de nuevo.'
   if (/invalid login credentials/i.test(msg)) return 'Correo o contraseña incorrectos.'
+  // Cuenta bloqueada en Supabase (supabase/17_usuarios_inactivos.sql) o escritura de un usuario desactivado.
+  if (e.code === 'user_banned' || /user is banned|usuario está desactivado/i.test(msg)) return MENSAJE_CUENTA_INACTIVA
   if (/user already registered|already been registered/i.test(msg)) return 'Ya existe una cuenta con ese correo. Inicia sesión.'
   if (/signups? not allowed|signup.*disabled/i.test(msg)) {
     return 'El registro de usuarios está desactivado en Supabase (Authentication → Sign In / Providers → "Allow new users to sign up").'

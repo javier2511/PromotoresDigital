@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, useLocation } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import { Toaster } from 'sonner'
 import { AppShell, type RouteHandle } from './components/AppShell'
 import { FullScreenLoader, Spinner } from './components/ui/Spinner'
 import { SchemaError } from './data/clientes'
+import { useSchema } from './data/hooks'
+import { avisarCuentaInactiva } from './lib/cuenta-inactiva'
 import { isNetworkError } from './lib/errors'
 import { isSupabaseConfigured } from './lib/supabase'
 import { ClienteDetallePage } from './pages/ClienteDetallePage'
@@ -62,6 +64,23 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return children
 }
 
+/**
+ * Un usuario desactivado (promotores.activo = false) no entra: se cierra su sesión y el inicio de sesión lo explica.
+ * Supabase además le impide entrar y guardar (supabase/17_usuarios_inactivos.sql).
+ */
+function CuentaActiva({ children }: { children: ReactNode }) {
+  const { signOut } = useAuth()
+  const { data: ctx } = useSchema()
+  const inactivo = ctx?.perfil?.activo === false
+  useEffect(() => {
+    if (!inactivo) return
+    avisarCuentaInactiva()
+    void signOut()
+  }, [inactivo, signOut])
+  if (inactivo) return <FullScreenLoader />
+  return children
+}
+
 const hideNav: RouteHandle = { hideNav: true }
 
 const router = createBrowserRouter([
@@ -70,7 +89,9 @@ const router = createBrowserRouter([
   {
     element: (
       <RequireAuth>
-        <AppShell />
+        <CuentaActiva>
+          <AppShell />
+        </CuentaActiva>
       </RequireAuth>
     ),
     errorElement: <RouteErrorPage />,
