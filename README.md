@@ -12,7 +12,7 @@ Reemplaza la versión de FlutterFlow **usando la misma base de datos de Supabase
 | --- | --- |
 | **Inicio de sesión** | Correo y contraseña de Supabase Auth. No hay "Crear cuenta": las cuentas las crea un administrador (**Equipo → Crear usuarios**). |
 | **Clientes** | Avance (visitados / asignados), **jornada de hoy** (iniciar / terminar), búsqueda, filtros Pendientes · Visitados · Todos, **filtro por día de visita** (columna `dia_visita`), orden por cercanía, distancia a cada cliente y "más cercano" destacado. Al finalizar una visita el cliente sale de Pendientes. |
-| **Mapa** | Pines por estado (rojo pendiente, verde visitado), agrupación cuando hay muchos, punto azul con círculo de precisión y orientación, botón "Mi ubicación", tarjeta del cliente con *Ver detalle* y *Cómo llegar*. En computadora, lista lateral + mapa. |
+| **Mapa** | Pines por estado (rojo pendiente, verde visitado), agrupación cuando hay muchos, punto azul con círculo de precisión y orientación, botón "Mi ubicación", tarjeta del cliente con *Ver detalle* y *Cómo llegar*. **Buscador** (nombre, número, dirección o teléfono) que encuentra a cualquier cliente aunque el filtro lo oculte, filtros **Pendientes · Visitados · Todos** y por día, y lista ordenada por **cercanía** o **nombre** (botón de lista en el teléfono; en computadora, a un lado del mapa). |
 | **Ficha del cliente** | Mini mapa con la distancia, botones a Google Maps, Waze y llamada, y la información que tenías en FlutterFlow: saldo de puntos, status autogestión, Premia, cuponera, canal y canjes / promos / lotería / retos de los últimos 3 meses. |
 | **Visita** | Se puede iniciar desde cualquier lugar. Al iniciarla se guarda la ubicación del promotor y su distancia al cliente; si está a más de `VITE_RADIO_VISITA_M` metros (100 por defecto) se le avisa a cuánto está y debe confirmar. Preguntas Sí/No, opción única, múltiple, número, fecha y texto; reglas de `preguntas_reglas`; borrador guardado en el teléfono (no se pierde si se cierra la app o se va la señal). |
 | **Visita finalizada** | Avance actualizado y el siguiente cliente más cercano. |
@@ -370,6 +370,7 @@ npm run dev                  # http://localhost:5173
 | `npm run build` | Revisión de tipos + versión de producción en `dist/` |
 | `npm test` | Pruebas (reglas de preguntas, distancias, formatos) |
 | `npm run lint` | Revisión de código |
+| `bash e2e/correr.sh` | Pruebas en el navegador con un simulador de Supabase (no toca tu base): por ahora, el mapa |
 
 La ubicación del navegador solo funciona en `https://` o en `localhost`.
 

@@ -13,8 +13,9 @@ import { ProgressRing } from '../components/ui/ProgressRing'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Skeleton } from '../components/ui/Skeleton'
 import { RADIO_VISITA_M } from '../config/app'
+import { coincideCliente, ordenarClientes, type OrdenClientes } from '../data/buscar'
 import { semanaDeAsignaciones } from '../data/clientes'
-import { useClientes, useSchema, type ClienteConDistancia, type Progreso } from '../data/hooks'
+import { useClientes, useSchema, type Progreso } from '../data/hooks'
 import { DIAS } from '../lib/dias'
 import { filtrarPorDia, SIN_DIA, useFiltroDia } from '../lib/filtro-dia'
 import { hoyLocal, partesPeriodo } from '../lib/periodos'
@@ -24,7 +25,6 @@ import { useUser } from '../providers/AuthProvider'
 import { useGeo } from '../providers/GeoProvider'
 
 type Filtro = 'pendientes' | 'visitados' | 'todos'
-type Orden = 'cercania' | 'nombre'
 
 const fechaFormato = new Intl.DateTimeFormat('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -101,7 +101,7 @@ export function ClientesPage() {
 
   const filtro = (params.get('f') as Filtro) || 'pendientes'
   const q = params.get('q') ?? ''
-  const orden: Orden = (params.get('o') as Orden) || (position ? 'cercania' : 'nombre')
+  const orden: OrdenClientes = (params.get('o') as OrdenClientes) || (position ? 'cercania' : 'nombre')
 
   const setParam = (key: string, value: string | null) =>
     setParams(
@@ -128,19 +128,9 @@ export function ClientesPage() {
     const filtered = delDia.filter((c) => {
       if (filtro === 'pendientes' && c.visitado) return false
       if (filtro === 'visitados' && !c.visitado) return false
-      if (!term) return true
-      return [c.nombre, c.direccion, c.codigo, c.telefono].some((v) => v && normalize(v).includes(term))
+      return coincideCliente(c, term)
     })
-    const byName = (a: ClienteConDistancia, b: ClienteConDistancia) => a.nombre.localeCompare(b.nombre, 'es')
-    return filtered.sort((a, b) => {
-      if (orden === 'cercania') {
-        if (a.distance === null && b.distance === null) return byName(a, b)
-        if (a.distance === null) return 1
-        if (b.distance === null) return -1
-        return a.distance - b.distance
-      }
-      return byName(a, b)
-    })
+    return ordenarClientes(filtered, orden)
   }, [delDia, filtro, q, orden])
 
   const nombre =
@@ -205,7 +195,7 @@ export function ClientesPage() {
                 onChange={(e) => setParam('q', e.target.value)}
                 placeholder="Buscar nombre o número…"
                 aria-label="Buscar clientes"
-                className="h-full min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted/70"
+                className="h-full min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted/70 [&::-webkit-search-cancel-button]:hidden"
               />
               {q && (
                 <button type="button" aria-label="Limpiar búsqueda" onClick={() => setParam('q', null)}>
