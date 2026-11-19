@@ -258,7 +258,9 @@ líder a alguien:
 **Importante:** `visitas` y `resultados_visitas` no tienen activada la seguridad por filas (RLS). La app solo le
 pide y le muestra al líder lo de su región, pero la base no lo impide (y cualquiera con la llave pública de la app
 podría leer esas dos tablas completas). `supabase/15_proteger_visitas.sql` la activa: cada promotor lee solo lo
-suyo, un admin todo y un líder su región; las visitas se siguen guardando igual. Antes de correrlo revisa que tu
+suyo, un admin todo y un líder su región; cada promotor sigue guardando (y, al descartar una visita guardada a medias,
+borrando) solo sus visitas, y sin sesión ya no se puede leer ni guardar nada. También quita dos políticas abiertas que
+la app no usa (`p_ins` en visitas y "Prueba update asignaciones"). Antes de correrlo revisa que tu
 Power BI (u otro sistema) no lea esas tablas con la llave anon: con la conexión directa a la base o con la llave
 service_role no le afecta. Para deshacerlo:
 `alter table public.visitas disable row level security; alter table public.resultados_visitas disable row level security;`
