@@ -71,7 +71,9 @@ quienes ya tienen cuenta.
 Si una cuenta no tiene fila en tu tabla de usuarios (por ejemplo, creada en *Add user*), al entrar por primera
 vez la app la agrega (`promotores`/`usuarios`…) con su id, correo y nombre (si tus políticas RLS lo permiten).
 Después tú le asignas clientes desde Supabase. **¿Olvidaste tu contraseña?** (requiere ejecutar `supabase/08_restablecer_contrasena.sql`): el promotor escribe
-su correo, confirma, y su contraseña pasa a ser la temporal definida en ese SQL. La app no la muestra: tú se la
+su correo, confirma, y su contraseña pasa a ser la temporal. La temporal no está en el código: la defines (y la
+cambias cuando quieras) en el SQL Editor con `select public.pd_definir_contrasena_temporal('…');` y queda guardada
+cifrada en Supabase. La app no la muestra: tú se la
 comunicas por otro medio. Al entrar con ella la app no lo deja seguir hasta que elija una nueva. Solo funciona con promotores activos (no con
 administradores), una vez cada 10 minutos por cuenta, y cada restablecimiento queda en la tabla
 `restablecimientos_contrasena`. **Riesgo aceptado:** no se verifica quién lo pide, así que cualquiera que conozca el
@@ -79,7 +81,7 @@ correo de un promotor podría restablecerlo y entrar con la temporal antes que �
 `drop function public.restablecer_contrasena_temporal(text);` (el botón avisará que no está activada).
 
 Lo que hace que se le pida una contraseña nueva es `debe_cambiar_contrasena: true` en su *User Metadata* (lo pone
-la función del SQL 08; si restableces a mano, agrégalo tú). La contraseña temporal solo está en el SQL 08.
+la función del SQL 08; si restableces a mano, agrégalo tú). No escribas la contraseña temporal en archivos del proyecto.
 
 ## Primer uso: verificar que lee bien tu base de datos
 
