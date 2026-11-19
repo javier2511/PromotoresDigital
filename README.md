@@ -265,6 +265,11 @@ Power BI (u otro sistema) no lea esas tablas con la llave anon: con la conexión
 service_role no le afecta. Para deshacerlo:
 `alter table public.visitas disable row level security; alter table public.resultados_visitas disable row level security;`
 
+Si en el Table Editor todavía aparece algo como **UNRESTRICTED**, `supabase/18_proteger_lo_demas.sql` lo cierra:
+vuelve a proteger `promotores` con sus políticas, activa la seguridad en cualquier otra tabla que no la tenga (la app
+no las usa; tú las sigues viendo en Supabase y Power BI conectado directo también) y hace que las vistas respeten los
+permisos de quien las consulta (`security_invoker`), para que sin sesión no muestren nada.
+
 ### Administradores: pestaña Tablero
 
 Los admins también ven la pestaña **Tablero** ("Desempeño de Visitas Promotores Digitales", con el mismo diseño
