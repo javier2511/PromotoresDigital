@@ -26,7 +26,10 @@ function tabla(columns, rows, pk) {
   return { columns, rows: rows.map((r) => Object.fromEntries(columns.map((c) => [c, r[c] === undefined ? null : r[c]]))), pk, seq: 1000 }
 }
 
-function crearBase() {
+/**
+ * Base de prueba. `rol` es el de Ana (la usuaria con la que se entra): 'promotor', 'admin' o 'lider' (región Norte).
+ */
+function crearBase({ rol = 'promotor' } = {}) {
   const cli = (id, id_cliente, nombre_cliente, calle, dLat, dLng, extra = {}) => ({
     id,
     id_cliente,
@@ -60,12 +63,16 @@ function crearBase() {
     created_at: '2026-10-01T00:00:00+00:00',
   })
   const OTRO = '00000000-0000-0000-0000-000000000001'
+  const LUIS = '00000000-0000-0000-0000-000000000002'
+  const MARTA = '00000000-0000-0000-0000-000000000003'
   const tables = {
     promotores: tabla(
       ['id_promotor', 'nombre', 'correo', 'activo', 'rol', 'created_at', 'latitud', 'longitud', 'ubicacion', 'region'],
       [
-        { id_promotor: UID, nombre: 'Ana López', correo: EMAIL, activo: true, rol: 'promotor', created_at: '2026-08-01T00:00:00+00:00', latitud: ME.latitude, longitud: ME.longitude },
+        { id_promotor: UID, nombre: 'Ana López', correo: EMAIL, activo: true, rol, region: 'Norte', created_at: '2026-08-01T00:00:00+00:00', latitud: ME.latitude, longitud: ME.longitude },
         { id_promotor: OTRO, nombre: 'Otro Promotor', correo: 'otro@empresa.com', activo: true, rol: 'promotor', created_at: '2026-08-01T00:00:00+00:00' },
+        { id_promotor: LUIS, nombre: 'Luis Pérez', correo: 'luis@empresa.com', activo: true, rol: 'promotor', region: ' norte ', created_at: '2026-08-01T00:00:00+00:00' },
+        { id_promotor: MARTA, nombre: 'Marta Ruiz', correo: 'marta@empresa.com', activo: true, rol: 'promotor', region: 'Sur', created_at: '2026-08-01T00:00:00+00:00' },
       ],
       'id_promotor',
     ),
@@ -80,6 +87,14 @@ function crearBase() {
         asig(74, '120400004', 2, 'Pendiente'),
         asig(75, '120400005', 2, 'Completada'),
         asig(76, '999000001', 1, 'Pendiente', OTRO),
+        // Del equipo: Luis (Norte) 3 esta semana (1 completada) y 1 la próxima; Marta (Sur) 2 pendientes y 1 cancelada.
+        asig(77, '120070912', 0, 'Completada', LUIS),
+        asig(78, '120317437', 2, 'Pendiente', LUIS),
+        asig(79, '120400001', 4, 'En proceso', LUIS),
+        asig(80, '120400001', 8, 'Pendiente', LUIS),
+        asig(81, '120400002', 1, 'Pendiente', MARTA),
+        asig(82, '120400004', 3, 'Reagendada', MARTA),
+        asig(83, '120400005', 3, 'Cancelada', MARTA),
       ],
       'id_asignacion',
     ),
@@ -116,7 +131,13 @@ function crearBase() {
   // Lo que deja ver la base a cada usuario (como las políticas RLS): sus asignaciones y los clientes asignados.
   tables.asignaciones.select = (r, uid) => r.id_promotor === uid
   tables.clientes.select = (r, uid, db) => db.tables.asignaciones.rows.some((a) => a.id_cliente === r.id_cliente && a.id_promotor === uid)
-  tables.promotores.select = (r, uid) => r.id_promotor === uid
+  // Promotores: la propia fila; un admin, todas; un líder, las de su región (supabase/10 y 14).
+  tables.promotores.select = (r, uid, db) => {
+    const yo = db.tables.promotores.rows.find((p) => p.id_promotor === uid)
+    if (r.id_promotor === uid || rolDe(yo) === 'admin') return true
+    const region = regionLider(yo)
+    return region !== null && clave(r.region) === region
+  }
   tables.visitas.select = (r, uid) => r.id_promotor === uid
   tables.resultados_visitas.select = (r, uid) => r.id_promotor === uid
   const usuarios = [
@@ -138,6 +159,11 @@ function crearBase() {
   ]
   return { tables, usuarios }
 }
+
+const clave = (texto) => String(texto ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
+const rolDe = (promotor) => clave(promotor?.rol)
+/** Región del líder activo (como region_lider() de supabase/14); null si no es líder. */
+const regionLider = (promotor) => (promotor && rolDe(promotor) === 'lider' && promotor.activo !== false ? clave(promotor.region) || null : null)
 
 // ---------------------------------------------------------------------------- filtros de PostgREST
 const CON_ZONA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
@@ -231,9 +257,35 @@ function instalarMock(context, db, log = []) {
     }
     if (url.pathname === '/auth/v1/logout') return route.fulfill({ status: 204, headers: CORS })
 
-    // ---- RPC: ninguna función existe en esta copia.
+    // ---- RPC: las de supabase/14 y 19 (si db.sinSql19, como si no se hubiera ejecutado el 19).
     const rpc = /^\/rest\/v1\/rpc\/(.+)$/.exec(url.pathname)
-    if (rpc) return errorPg(route, 404, 'PGRST202', `Could not find the function public.${rpc[1]} in the schema cache`)
+    if (rpc) {
+      const body = JSON.parse(req.postData() || '{}')
+      const yo = db.tables.promotores.rows.find((p) => p.id_promotor === uid)
+      log.push(`RPC ${rpc[1]} ${JSON.stringify(body)}`)
+      if (rpc[1] === 'region_lider') return json(route, 200, regionLider(yo))
+      if (rpc[1] === 'pd_asignaciones_por_promotor' && !db.sinSql19) {
+        const admin = rolDe(yo) === 'admin'
+        const region = regionLider(yo)
+        if (!admin && region === null) return errorPg(route, 400, 'P0001', 'Solo un administrador o un líder puede ver las asignaciones de los promotores.')
+        const deRegion = new Set(db.tables.promotores.rows.filter((p) => clave(p.region) === region).map((p) => p.id_promotor))
+        const cuentas = new Map()
+        for (const a of db.tables.asignaciones.rows) {
+          const estatus = clave(a.estatus)
+          if (estatus === 'cancelada') continue
+          if (body.p_desde && a.fecha_asignada < body.p_desde) continue
+          if (body.p_hasta && a.fecha_asignada >= body.p_hasta) continue
+          if (!admin && !deRegion.has(a.id_promotor)) continue
+          const c = cuentas.get(a.id_promotor) ?? { id_promotor: a.id_promotor, total: 0, completadas: 0, pendientes: 0 }
+          c.total++
+          if (estatus === 'completada') c.completadas++
+          else c.pendientes++
+          cuentas.set(a.id_promotor, c)
+        }
+        return json(route, 200, [...cuentas.values()])
+      }
+      return errorPg(route, 404, 'PGRST202', `Could not find the function public.${rpc[1]} in the schema cache`)
+    }
 
     // ---- Tablas
     const nombre = /^\/rest\/v1\/([^/]+)$/.exec(url.pathname)?.[1]

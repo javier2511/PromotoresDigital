@@ -61,7 +61,8 @@ export function AppShell() {
   const { data: ctx } = useSchema()
   useAsegurarPerfil()
   // El Concurso lo ven todos: el admin, de todos; el líder, de su región; el promotor, solo su avance.
-  const extra = esAdmin(ctx) ? [TABLERO, CONCURSO, EQUIPO] : esLider(ctx) ? [TABLERO, CONCURSO] : [CONCURSO]
+  // El líder entra a Equipo solo para ver las asignaciones de su región.
+  const extra = esAdmin(ctx) ? [TABLERO, CONCURSO, EQUIPO] : esLider(ctx) ? [TABLERO, CONCURSO, EQUIPO] : [CONCURSO]
   const nav = [...NAV.slice(0, 3), ...extra, NAV[3]]
   // Con 7 pestañas (admin) la barra del teléfono se compacta un poco para que quepan.
   const compacta = nav.length >= 7

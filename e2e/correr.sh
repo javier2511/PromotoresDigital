@@ -16,4 +16,10 @@ for _ in $(seq 1 60); do
   sleep 0.5
 done
 
-node e2e/mapa.cjs "${1:-e2e/capturas}"
+CAPTURAS="${1:-e2e/capturas}"
+fallo=0
+for prueba in e2e/mapa.cjs e2e/equipo.cjs; do
+  echo "== $prueba"
+  node "$prueba" "$CAPTURAS" || fallo=1
+done
+exit $fallo

@@ -211,6 +211,13 @@ protege la tabla promotores: cada usuario ve solo su fila (un admin, todas), nad
 app y al registrarse solo se puede crear la propia fila como promotor. Para hacer admin a alguien:
 `update public.promotores set rol = 'admin' where correo = 'correo@empresa.com';`
 
+**Asignaciones por promotor:** en **Equipo → Asignaciones** cada promotor aparece con sus asignaciones del periodo
+(la semana en curso al abrir; también Mes, Total o un Rango, y semanas próximas si ya las cargaste): asignadas,
+completadas y **pendientes** (Pendiente, En proceso o Reagendada; las canceladas no cuentan), con los más pendientes
+primero, buscador, filtro de región y descarga en CSV. Un **líder** también entra a Equipo, pero solo ve esta vista y
+solo a los promotores de su región. Requiere ejecutar `supabase/19_asignaciones_equipo.sql` (la base hace las cuentas y
+manda un renglón por promotor).
+
 **Crear usuarios (varios a la vez):** en **Equipo → Crear usuarios** pega de Excel las columnas **Nombre**,
 **Correo** y **Contraseña**, y si quieres una cuarta, **Región** (con o sin la fila de títulos; también se puede
 subir un CSV). La región se guarda con `supabase/14_lideres_por_region.sql`. La app revisa cada

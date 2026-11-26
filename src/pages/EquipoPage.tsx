@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleCheck, Clock, MapPin, RefreshCw, Sunrise, TriangleAlert, UserPlus, Users } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Navigate } from 'react-router'
+import { Navigate, useSearchParams } from 'react-router'
+import { AsignacionesEquipo } from '../components/equipo/AsignacionesEquipo'
 import { ErrorState } from '../components/ErrorState'
 import { PageTitle } from '../components/PageHeader'
 import { Alert } from '../components/ui/Alert'
@@ -10,13 +11,14 @@ import { ButtonLink } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
+import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Skeleton } from '../components/ui/Skeleton'
 import { Spinner } from '../components/ui/Spinner'
 import { enlaceMapa, fetchEquipo, type MiembroEquipo } from '../data/equipo'
 import { useSchema, type ClienteConDistancia } from '../data/hooks'
 import { fechaLocal } from '../data/jornada'
 import type { LatLng } from '../lib/geo'
-import { esAdmin } from '../lib/schema-resolver'
+import { esAdmin, esLider } from '../lib/schema-resolver'
 import { useUser } from '../providers/AuthProvider'
 
 const ClientMap = lazy(() => import('../components/map/ClientMap'))
@@ -94,10 +96,17 @@ function MiembroCard({ m, esHoy, seleccionado, ahora }: { m: MiembroEquipo; esHo
   )
 }
 
-/** Solo administradores: jornadas del día de todos los promotores. */
+type Vista = 'jornadas' | 'asignaciones'
+
+/**
+ * Administradores: jornadas del día y asignaciones de todos los promotores. Líderes: solo las asignaciones de los
+ * promotores de su región.
+ */
 export function EquipoPage() {
   const user = useUser()
+  const queryClient = useQueryClient()
   const { data: ctx, isPending: ctxPending } = useSchema()
+  const [params, setParams] = useSearchParams()
   const hoy = fechaLocal()
   const [fecha, setFecha] = useState(hoy)
   const [seleccionado, setSeleccionado] = useState<string | null>(null)
@@ -108,6 +117,9 @@ export function EquipoPage() {
     return () => window.clearInterval(id)
   }, [])
   const admin = esAdmin(ctx)
+  const lider = !admin && esLider(ctx)
+  // El líder solo ve las asignaciones de su región.
+  const vista: Vista = !admin || params.get('v') === 'asignaciones' ? 'asignaciones' : 'jornadas'
   const tabla = ctx?.tables.jornadas.table
 
   const query = useQuery({
@@ -151,7 +163,7 @@ export function EquipoPage() {
   )
 
   if (ctxPending) return null
-  if (!admin) return <Navigate to="/" replace />
+  if (!admin && !lider) return <Navigate to="/" replace />
 
   const seleccionar = (key: string | null) => {
     setSeleccionado(key)
@@ -162,21 +174,31 @@ export function EquipoPage() {
     <div className="mx-auto max-w-5xl px-4 pb-8 sm:px-6">
       <PageTitle
         title="Equipo"
-        subtitle="Jornadas de los promotores"
+        subtitle={
+          vista === 'jornadas'
+            ? 'Jornadas de los promotores'
+            : lider && ctx?.perfil?.region
+              ? `Asignaciones de los promotores de la región ${ctx.perfil.region}`
+              : 'Asignaciones de los promotores'
+        }
         actions={
           <>
-            <ButtonLink
-              to="/equipo/usuarios"
-              variant="outline"
-              size="sm"
-              icon={<UserPlus className="size-4" />}
-              className="self-center"
-            >
-              Crear usuarios
-            </ButtonLink>
+            {admin && (
+              <ButtonLink
+                to="/equipo/usuarios"
+                variant="outline"
+                size="sm"
+                icon={<UserPlus className="size-4" />}
+                className="self-center"
+              >
+                Crear usuarios
+              </ButtonLink>
+            )}
             <button
               type="button"
-              onClick={() => query.refetch()}
+              onClick={() =>
+                void queryClient.invalidateQueries({ queryKey: [vista === 'jornadas' ? 'equipo' : 'asignaciones-equipo', user.id] })
+              }
               aria-label="Actualizar"
               className="grid size-10 place-items-center rounded-full text-muted transition hover:bg-card hover:text-fg"
             >
@@ -186,115 +208,134 @@ export function EquipoPage() {
         }
       />
 
-      <div className="mt-5 flex items-center gap-2">
-        <input
-          type="date"
-          value={fecha}
-          max={hoy}
-          onChange={(e) => e.target.value && setFecha(e.target.value)}
-          aria-label="Fecha"
-          className="h-11 rounded-xl border border-line bg-card px-3 text-[16px] text-fg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
+      {admin && (
+        <SegmentedControl<Vista>
+          label="Vista de Equipo"
+          value={vista}
+          onChange={(v) => setParams(v === 'asignaciones' ? { v } : {}, { replace: true })}
+          className="mt-5 sm:w-96"
+          options={[
+            { value: 'jornadas', label: 'Jornadas' },
+            { value: 'asignaciones', label: 'Asignaciones' },
+          ]}
         />
-        {fecha !== hoy && (
-          <button
-            type="button"
-            onClick={() => setFecha(hoy)}
-            className="h-11 rounded-xl border border-line bg-card px-4 text-sm font-semibold hover:bg-soft"
-          >
-            Hoy
-          </button>
-        )}
-      </div>
+      )}
 
-      {!tabla ? (
-        <EmptyState icon={Sunrise} title="Aún no hay jornadas">
-          Ejecuta supabase/06_jornadas.sql en Supabase para que los promotores registren su jornada.
-        </EmptyState>
-      ) : query.isError ? (
-        <div className="mt-5">
-          <ErrorState error={query.error} onRetry={() => query.refetch()} />
-        </div>
-      ) : query.isPending ? (
-        <div className="mt-5 space-y-3">
-          <Skeleton className="h-24 rounded-2xl" />
-          <Skeleton className="h-64 rounded-2xl" />
-          <Skeleton className="h-32 rounded-2xl" />
-        </div>
+      {vista === 'asignaciones' && ctx ? (
+        <AsignacionesEquipo ctx={ctx} />
       ) : (
         <>
-          {query.data.promotoresVisibles <= 1 && (
-            <Alert tone="warning" icon={<TriangleAlert />} className="mt-5">
-              Solo puedes ver tu propia fila de promotores. Ejecuta supabase/10_admin_jornadas.sql para que los
-              administradores vean las jornadas de todo el equipo.
-            </Alert>
+        <div className="mt-5 flex items-center gap-2">
+          <input
+            type="date"
+            value={fecha}
+            max={hoy}
+            onChange={(e) => e.target.value && setFecha(e.target.value)}
+            aria-label="Fecha"
+            className="h-11 rounded-xl border border-line bg-card px-3 text-[16px] text-fg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
+          />
+          {fecha !== hoy && (
+            <button
+              type="button"
+              onClick={() => setFecha(hoy)}
+              className="h-11 rounded-xl border border-line bg-card px-4 text-sm font-semibold hover:bg-soft"
+            >
+              Hoy
+            </button>
           )}
+        </div>
 
-          <Card className="mt-5 grid grid-cols-3 divide-x divide-line overflow-hidden text-center">
-            <div className="p-3.5">
-              <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
-                <Clock className="size-3.5" /> Iniciaron
-              </p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">
-                {resumen.iniciaron}
-                <span className="text-base font-semibold text-muted"> de {resumen.total}</span>
-              </p>
-            </div>
-            <div className="p-3.5">
-              <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
-                <CircleCheck className="size-3.5" /> Terminaron
-              </p>
-              <p className="mt-1 text-2xl font-bold text-emerald-600 tabular-nums dark:text-emerald-400">{resumen.terminaron}</p>
-            </div>
-            <div className="p-3.5">
-              <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
-                <Users className="size-3.5" /> Sin iniciar
-              </p>
-              <p className="mt-1 text-2xl font-bold text-brand-600 tabular-nums dark:text-brand-400">{resumen.sinIniciar}</p>
-            </div>
-          </Card>
+        {!tabla ? (
+          <EmptyState icon={Sunrise} title="Aún no hay jornadas">
+            Ejecuta supabase/06_jornadas.sql en Supabase para que los promotores registren su jornada.
+          </EmptyState>
+        ) : query.isError ? (
+          <div className="mt-5">
+            <ErrorState error={query.error} onRetry={() => query.refetch()} />
+          </div>
+        ) : query.isPending ? (
+          <div className="mt-5 space-y-3">
+            <Skeleton className="h-24 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-32 rounded-2xl" />
+          </div>
+        ) : (
+          <>
+            {query.data.promotoresVisibles <= 1 && (
+              <Alert tone="warning" icon={<TriangleAlert />} className="mt-5">
+                Solo puedes ver tu propia fila de promotores. Ejecuta supabase/10_admin_jornadas.sql para que los
+                administradores vean las jornadas de todo el equipo.
+              </Alert>
+            )}
 
-          {puntos.length > 0 && (
-            <Card className="mt-3 overflow-hidden">
-              <div className="relative h-72">
-                <Suspense
-                  fallback={
-                    <div className="absolute inset-0 grid place-items-center bg-soft">
-                      <Spinner className="size-6 text-brand-600" />
-                    </div>
-                  }
-                >
-                  <ClientMap
-                    clientes={puntos}
-                    me={null}
-                    selectedKey={seleccionado}
-                    onSelect={seleccionar}
-                    className="absolute inset-0"
-                  />
-                </Suspense>
+            <Card className="mt-5 grid grid-cols-3 divide-x divide-line overflow-hidden text-center">
+              <div className="p-3.5">
+                <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+                  <Clock className="size-3.5" /> Iniciaron
+                </p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">
+                  {resumen.iniciaron}
+                  <span className="text-base font-semibold text-muted"> de {resumen.total}</span>
+                </p>
               </div>
-              <p className="flex items-center gap-4 border-t border-line px-4 py-2 text-xs text-muted">
-                Dónde iniciaron:
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-brand-600" /> En curso
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-emerald-500" /> Terminó
-                </span>
-              </p>
+              <div className="p-3.5">
+                <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+                  <CircleCheck className="size-3.5" /> Terminaron
+                </p>
+                <p className="mt-1 text-2xl font-bold text-emerald-600 tabular-nums dark:text-emerald-400">{resumen.terminaron}</p>
+              </div>
+              <div className="p-3.5">
+                <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+                  <Users className="size-3.5" /> Sin iniciar
+                </p>
+                <p className="mt-1 text-2xl font-bold text-brand-600 tabular-nums dark:text-brand-400">{resumen.sinIniciar}</p>
+              </div>
             </Card>
-          )}
 
-          {query.data.miembros.length === 0 ? (
-            <EmptyState icon={Users} title="No hay promotores">
-              Los usuarios con rol "promotor" en la tabla promotores aparecerán aquí.
-            </EmptyState>
-          ) : (
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {query.data.miembros.map((m) => (
-                <MiembroCard key={String(m.id)} m={m} esHoy={fecha === hoy} seleccionado={seleccionado === String(m.id)} ahora={ahora} />
-              ))}
-            </div>
-          )}
+            {puntos.length > 0 && (
+              <Card className="mt-3 overflow-hidden">
+                <div className="relative h-72">
+                  <Suspense
+                    fallback={
+                      <div className="absolute inset-0 grid place-items-center bg-soft">
+                        <Spinner className="size-6 text-brand-600" />
+                      </div>
+                    }
+                  >
+                    <ClientMap
+                      clientes={puntos}
+                      me={null}
+                      selectedKey={seleccionado}
+                      onSelect={seleccionar}
+                      className="absolute inset-0"
+                    />
+                  </Suspense>
+                </div>
+                <p className="flex items-center gap-4 border-t border-line px-4 py-2 text-xs text-muted">
+                  Dónde iniciaron:
+                  <span className="flex items-center gap-1.5">
+                    <span className="size-2.5 rounded-full bg-brand-600" /> En curso
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="size-2.5 rounded-full bg-emerald-500" /> Terminó
+                  </span>
+                </p>
+              </Card>
+            )}
+
+            {query.data.miembros.length === 0 ? (
+              <EmptyState icon={Users} title="No hay promotores">
+                Los usuarios con rol "promotor" en la tabla promotores aparecerán aquí.
+              </EmptyState>
+            ) : (
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {query.data.miembros.map((m) => (
+                  <MiembroCard key={String(m.id)} m={m} esHoy={fecha === hoy} seleccionado={seleccionado === String(m.id)} ahora={ahora} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
         </>
       )}
     </div>

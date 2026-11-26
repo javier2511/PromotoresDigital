@@ -70,16 +70,20 @@ export function SelectorPeriodo({
   hoy,
   primerDia,
   todo = 'Todas las visitas',
+  futuro = false,
 }: {
   p: ReturnType<typeof usePeriodo>
   hoy: string
   primerDia: string | null
   /** Texto de "Total". */
   todo?: string
+  /** Permite elegir fechas después de hoy (p. ej. asignaciones ya cargadas para la próxima semana). */
+  futuro?: boolean
 }) {
   const { periodo, ancla, rango } = p
   const siguiente = moverPeriodo(periodo, ancla, 1)
-  const hayFuturo = rangoDe(periodo, siguiente).desde <= hoy
+  const hayFuturo = futuro || rangoDe(periodo, siguiente).desde <= hoy
+  const maximo = futuro ? undefined : hoy
   const esActual = rango.desde <= hoy && hoy < rango.hasta
   const periodoTexto = partesPeriodo(rango, hoy)
 
@@ -96,8 +100,8 @@ export function SelectorPeriodo({
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {(
             [
-              ['Desde', p.desde, p.cambiarDesde, undefined, hoy],
-              ['Hasta', p.hasta, p.cambiarHasta, p.desde, hoy],
+              ['Desde', p.desde, p.cambiarDesde, undefined, maximo],
+              ['Hasta', p.hasta, p.cambiarHasta, p.desde, maximo],
             ] as const
           ).map(([etiqueta, valor, cambiar, min, max]) => (
             <label
@@ -147,7 +151,7 @@ export function SelectorPeriodo({
             <input
               type="date"
               value={ancla}
-              max={hoy}
+              max={maximo}
               onChange={(e) => e.target.value && p.irA(e.target.value)}
               onClick={(e) => {
                 try {
