@@ -3,13 +3,13 @@ import { ChartColumn, MapPin, RefreshCw, Search, Smartphone, Store, X } from 'lu
 import { useMemo, useState, type ReactNode } from 'react'
 import { ErrorState } from '../components/ErrorState'
 import { PageTitle } from '../components/PageHeader'
-import { SelectorPeriodo } from '../components/tablero/Filtros'
+import { Chip, FILA_CHIPS, FiltroRegion, SelectorPeriodo } from '../components/tablero/Filtros'
 import { usePeriodo } from '../components/tablero/usePeriodo'
 import { Card } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Skeleton } from '../components/ui/Skeleton'
-import { FaltaSqlRegiones, fetchAlcance, idsDe, SinRegion } from '../data/alcance'
+import { FaltaSqlRegiones, fetchAlcance, idsDe, opcionesRegion, SinRegion } from '../data/alcance'
 import { useClientes, useResultados, useSchema } from '../data/hooks'
 import {
   fetchResultadosEquipo,
@@ -21,7 +21,7 @@ import {
 } from '../data/resultados'
 import { formatoEntero } from '../lib/formato'
 import { hoyLocal } from '../lib/periodos'
-import { veEquipo, type SchemaContext } from '../lib/schema-resolver'
+import { esAdmin, veEquipo, type SchemaContext } from '../lib/schema-resolver'
 import type { Row } from '../lib/supabase'
 import { ETIQUETA_INDICADOR } from '../config/schema'
 import { esVacio, formatValue, humanize, isNumeric, normalize } from '../lib/text'
@@ -194,6 +194,12 @@ function ListaResultados({ tarjetas, vacio, nota }: { tarjetas: Tarjeta[]; vacio
   )
 }
 
+/** Valor del filtro de promotor para los resultados sin promotor. */
+const SIN_PROMOTOR = '__sin__'
+const promotorDe = (row: Row, columna: string | undefined) =>
+  columna && !esVacio(row[columna]) ? String(row[columna]) : SIN_PROMOTOR
+const alternar = <T,>(lista: T[], x: T) => (lista.includes(x) ? lista.filter((y) => y !== x) : [...lista, x])
+
 /** Aviso cuando hay más tarjetas de las que se dibujan (el resumen sí cuenta todas). */
 const notaLimite = (total: number) =>
   total > MAX_RESULTADOS ? ` · los ${formatoEntero(MAX_RESULTADOS)} más recientes de ${formatoEntero(total)}` : undefined
@@ -286,7 +292,11 @@ function ResultadosPropios() {
 /** Administradores (todos los promotores) y líderes (los de su región): los resultados del equipo. */
 function ResultadosEquipo({ ctx }: { ctx: SchemaContext }) {
   const user = useUser()
-  const [promotor, setPromotor] = useState('')
+  const admin = esAdmin(ctx)
+  /** Regiones elegidas (sin mayúsculas ni acentos; '' = sin región; vacío: todas). Solo el admin. */
+  const [regiones, setRegiones] = useState<string[]>([])
+  /** Promotores elegidos (vacío: todos). */
+  const [elegidos, setElegidos] = useState<string[]>([])
   const alcanceQuery = useQuery({
     queryKey: ['alcance', user.id, ctx.perfil?.rol, ctx.perfil?.region],
     queryFn: () => fetchAlcance(ctx),
@@ -308,22 +318,46 @@ function ResultadosEquipo({ ctx }: { ctx: SchemaContext }) {
   const primerDia = useMemo(() => primerDiaResultados(filas ?? [], cols.fecha), [filas, cols.fecha])
   const delPeriodo = useMemo(() => resultadosDelPeriodo(filas ?? [], cols.fecha, periodo.rango), [filas, cols.fecha, periodo.rango])
 
-  // Filtro: los promotores que tienen resultados (con cuántos en el periodo), por nombre. Se listan aunque en el
-  // periodo no tengan, para no perder al elegido al cambiar de periodo.
-  const opciones = useMemo(() => {
-    const col = cols.usuario
-    if (!filas || !col) return []
-    const cuenta = new Map<string, number>()
-    for (const r of filas) if (!esVacio(r[col])) cuenta.set(String(r[col]), 0)
-    for (const r of delPeriodo) if (!esVacio(r[col])) cuenta.set(String(r[col]), (cuenta.get(String(r[col])) ?? 0) + 1)
-    return [...cuenta]
-      .map(([id, n]) => ({ id, n, nombre: nombres.get(id) ?? id }))
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [filas, delPeriodo, cols.usuario, nombres])
-  const elegidas = useMemo(
-    () => (promotor && cols.usuario ? delPeriodo.filter((r) => String(r[cols.usuario!]) === promotor) : delPeriodo),
-    [delPeriodo, promotor, cols.usuario],
+  // Filtros como en el Tablero: región (solo el admin) y uno o varios promotores.
+  const regionPorPromotor = useMemo(
+    () => new Map((alcance?.promotores ?? []).map((p) => [p.id, normalize(p.region)])),
+    [alcance],
   )
+  const delRegion = useMemo(
+    () =>
+      regiones.length
+        ? delPeriodo.filter((r) => regiones.includes(regionPorPromotor.get(promotorDe(r, cols.usuario)) ?? ''))
+        : delPeriodo,
+    [delPeriodo, regiones, regionPorPromotor, cols.usuario],
+  )
+  // Región: las de los promotores con resultados en el periodo (y las elegidas).
+  const regionesOpciones = useMemo(
+    () =>
+      admin
+        ? opcionesRegion(alcance?.promotores ?? [], [
+            ...delPeriodo.map((r) => regionPorPromotor.get(promotorDe(r, cols.usuario)) ?? ''),
+            ...regiones,
+          ])
+        : [],
+    [admin, alcance, delPeriodo, regionPorPromotor, regiones, cols.usuario],
+  )
+  // Promotor: los que tienen resultados en el periodo y la región (y los elegidos, para poder quitarlos).
+  const opciones = useMemo(() => {
+    if (!cols.usuario) return []
+    const ids = new Set([...delRegion.map((r) => promotorDe(r, cols.usuario)), ...elegidos])
+    return [...ids]
+      .map((id) => ({ id, nombre: id === SIN_PROMOTOR ? 'Sin promotor' : (nombres.get(id) ?? id) }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  }, [delRegion, elegidos, nombres, cols.usuario])
+  const elegidas = useMemo(
+    () => (elegidos.length ? delRegion.filter((r) => elegidos.includes(promotorDe(r, cols.usuario))) : delRegion),
+    [delRegion, elegidos, cols.usuario],
+  )
+  // Al cambiar de región se quitan los promotores elegidos (podrían ser de otra).
+  const elegirRegiones = (lista: string[]) => {
+    setRegiones(lista)
+    setElegidos([])
+  }
   const resumen = useMemo(
     () => (elegidas.length ? resumirResultados(elegidas, cols.cliente, cols.indicador) : null),
     [elegidas, cols.cliente, cols.indicador],
@@ -375,26 +409,25 @@ function ResultadosEquipo({ ctx }: { ctx: SchemaContext }) {
         </div>
       ) : (
         <>
-          {((cols.fecha && (filas?.length ?? 0) > 0) || opciones.length > 1) && (
+          {(filas?.length ?? 0) > 0 && (
             <div className="mt-5 space-y-3">
-              {cols.fecha && (filas?.length ?? 0) > 0 && (
-                <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todos los resultados" />
+              <FiltroRegion opciones={regionesOpciones} elegidas={regiones} onElegir={elegirRegiones} />
+              {opciones.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">Promotor</p>
+                  <div className={FILA_CHIPS} role="group" aria-label="Promotor">
+                    <Chip activo={elegidos.length === 0} onClick={() => setElegidos([])}>
+                      Todos
+                    </Chip>
+                    {opciones.map((o) => (
+                      <Chip key={o.id} activo={elegidos.includes(o.id)} onClick={() => setElegidos((l) => alternar(l, o.id))}>
+                        {o.nombre}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
               )}
-              {opciones.length > 1 && (
-                <select
-                  value={promotor}
-                  onChange={(e) => setPromotor(e.target.value)}
-                  aria-label="Promotor"
-                  className="h-11 w-full rounded-xl border border-line bg-card px-3 text-[16px] text-fg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 sm:w-80"
-                >
-                  <option value="">Todos los promotores ({formatoEntero(delPeriodo.length)})</option>
-                  {opciones.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.nombre} ({formatoEntero(o.n)})
-                    </option>
-                  ))}
-                </select>
-              )}
+              {cols.fecha && <SelectorPeriodo p={periodo} hoy={hoy} primerDia={primerDia} todo="Todos los resultados" />}
             </div>
           )}
           {resumen && <ResumenCard resumen={resumen} />}

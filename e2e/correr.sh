@@ -18,7 +18,7 @@ done
 
 CAPTURAS="${1:-e2e/capturas}"
 fallo=0
-for prueba in e2e/mapa.cjs e2e/equipo.cjs; do
+for prueba in e2e/mapa.cjs e2e/equipo.cjs e2e/resultados.cjs; do
   echo "== $prueba"
   node "$prueba" "$CAPTURAS" || fallo=1
 done

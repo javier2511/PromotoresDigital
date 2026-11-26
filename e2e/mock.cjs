@@ -119,7 +119,15 @@ function crearBase({ rol = 'promotor' } = {}) {
     ),
     resultados_visitas: tabla(
       ['id_resultado', 'id_visita', 'id_cliente', 'nombre_cliente', 'id_promotor', 'fecha_visita', 'digital_post_visita', 'fecha_actualizacion'],
-      [{ id_resultado: 1, id_visita: 40, id_cliente: '120400002', nombre_cliente: 'Super Mini 24', id_promotor: UID, fecha_visita: '2026-10-14T10:00:00', digital_post_visita: true, fecha_actualizacion: '2026-10-15T00:00:00' }],
+      [
+        { id_resultado: 1, id_visita: 40, id_cliente: '120400002', nombre_cliente: 'Super Mini 24', id_promotor: UID, fecha_visita: '2026-10-14T10:00:00', digital_post_visita: true, fecha_actualizacion: '2026-10-15T00:00:00' },
+        // Esta semana: Ana 1, Luis 2 y Marta 1; y una de Marta de la semana pasada.
+        { id_resultado: 2, id_visita: 41, id_cliente: '120317437', nombre_cliente: 'Miscelánea Lupita', id_promotor: UID, fecha_visita: `${diaDeEstaSemana(1)}T11:00:00`, digital_post_visita: false },
+        { id_resultado: 3, id_visita: 42, id_cliente: '120070912', nombre_cliente: 'Abarrotes La Güera', id_promotor: LUIS, fecha_visita: `${diaDeEstaSemana(0)}T10:00:00`, digital_post_visita: true },
+        { id_resultado: 4, id_visita: 43, id_cliente: '120400001', nombre_cliente: 'Tienda Don Pepe', id_promotor: LUIS, fecha_visita: `${diaDeEstaSemana(2)}T12:00:00`, digital_post_visita: false },
+        { id_resultado: 5, id_visita: 44, id_cliente: '120400002', nombre_cliente: 'Super Mini 24', id_promotor: MARTA, fecha_visita: `${diaDeEstaSemana(1)}T09:00:00`, digital_post_visita: true },
+        { id_resultado: 6, id_visita: 45, id_cliente: '120400004', nombre_cliente: 'Cremería Sin Mapa', id_promotor: MARTA, fecha_visita: `${diaDeEstaSemana(-3)}T09:00:00`, digital_post_visita: false },
+      ],
       'id_resultado',
     ),
     jornadas: tabla(
@@ -138,8 +146,9 @@ function crearBase({ rol = 'promotor' } = {}) {
     const region = regionLider(yo)
     return region !== null && clave(r.region) === region
   }
-  tables.visitas.select = (r, uid) => r.id_promotor === uid
-  tables.resultados_visitas.select = (r, uid) => r.id_promotor === uid
+  // Visitas y resultados: los propios; un admin, todos; un líder, los de su región (supabase/11, 14 y 15).
+  tables.visitas.select = (r, uid, db) => puedeVer(r.id_promotor, uid, db)
+  tables.resultados_visitas.select = (r, uid, db) => puedeVer(r.id_promotor, uid, db)
   const usuarios = [
     {
       id: UID,
@@ -164,6 +173,15 @@ const clave = (texto) => String(texto ?? '').normalize('NFD').replace(/\p{Diacri
 const rolDe = (promotor) => clave(promotor?.rol)
 /** Región del líder activo (como region_lider() de supabase/14); null si no es líder. */
 const regionLider = (promotor) => (promotor && rolDe(promotor) === 'lider' && promotor.activo !== false ? clave(promotor.region) || null : null)
+/** ¿El usuario puede ver las filas de ese promotor? Las propias; un admin, todas; un líder, las de su región. */
+function puedeVer(idPromotor, uid, db) {
+  if (String(idPromotor) === uid) return true
+  const yo = db.tables.promotores.rows.find((p) => p.id_promotor === uid)
+  if (rolDe(yo) === 'admin') return true
+  const region = regionLider(yo)
+  const suyo = db.tables.promotores.rows.find((p) => p.id_promotor === String(idPromotor))
+  return region !== null && suyo !== undefined && clave(suyo.region) === region
+}
 
 // ---------------------------------------------------------------------------- filtros de PostgREST
 const CON_ZONA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
